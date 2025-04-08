@@ -33,3 +33,6 @@
 
 # Uncessecary media
 *.avi
+
+#Venv
+my-venv
