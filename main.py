@@ -35,19 +35,39 @@ def get_distance(camera):
 
 def main():
     #setup
-    camera0 = camera_state("/dev/video0", detection_data())
+    camera0 = camera_state("camera_0.avi", detection_data())
     #camera1 = camera_state()
     #camera2 = camera_state()
     #camera3 = camera_state()
 
     #cameras = [camera0, camera1, camera2, camera3]
 
+    start_time = time.time()
+
+    filename = "test_video.avi"
+    if os.path.exists(filename):
+        os.remove(filename)
+        print("old video deleted")
+
     writer = cv2.VideoWriter()
-    codec = camera0.cap.get(cv2.CAP_PROP_FOURCC)
-    fps = camera0.cap.get(cv2.CAP_PROP_)
-    #writer.open("writertest.avi")
+    codec = int(camera0.cap.get(cv2.CAP_PROP_FOURCC))
+    fps = camera0.cap.get(cv2.CAP_PROP_FPS)
+    framesize = (int(camera0.cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(camera0.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+    outputVideo = cv2.VideoWriter()
+    outputVideo.open("test_video.avi", codec, fps, framesize, True)
+    if not outputVideo.isOpened():
+        print("output video did not open")
+    frame = cv2.UMat()
+
     #Business logic
-    #while True:
+    program_terminate = False
+    while not program_terminate:
+        _ , frame = camera0.cap.read()
+        outputVideo.write(frame)
+
+        #end the program after 3 seconds
+        if time.time() > start_time + 3:
+            program_terminate = True
         
         
 
