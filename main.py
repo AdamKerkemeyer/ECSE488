@@ -12,19 +12,87 @@ class detection_data:
         print("this is a placeholder Adam pls fill me in")
 
 class camera_state:
-    def __init__(self, source, data):
-        self.source = source
+    def __init__(self, source, data, name):
+        self.source = source #source of the video feed
         self.cap = cv2.VideoCapture(source)
-        self.data = data
+        self.writer = cv3.VideoWriter()
+        self.codec = int(self.cap.get(cv2.CAP_PROP_FOURCC))
+        self.framesize = (int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+        self.data = data #detection data storage
+        self.name = name #name of the cammera
     #state is basically an emun
     #1: no person in frame
     #2: person in frame is farther than 50m
     #3: person in frame is inbetween 10m and 50m from cammera
     #4: person in frame is closer than 10m
     state = 1
-    #lscan_time is the sys_time at the last time this cammera was evaluated. It it initially 0
-    #to force an imediate scan on system poweron
-    lscan_time = time.time()
+    #last_pic_time is the time the last picuture was take so I can take a picture every 3 seconds
+    last_pic_time = time.time()
+    #last seen times for each state
+    last_affirmed_2 = time.time()
+    last_affirmed_3 = time.time()
+    last_affirmed_4 = time.time()
+
+
+    #logic for state changes, It is not neccessarily if distance setpoint hit chage state
+    #See state trasnition table
+    #Will update the VideoWriter (self.writer) to reflect the new framereate if needed
+    def update_state(distance)
+        if state == 0:                                                    #state 1
+            if distance > 0:                                                #transition to 2
+                state = 2
+                last_affirmed_2 = time.time()
+        elif state == 2:                                                  #state 2
+            if distance >= 50:                                              #no change
+                last_affirmed_2 = time.time()
+            elif distance < 50:                                             #transition to state 3
+                state = 3
+                last_affirmed_3 = time.time()
+                videoName = path + "/" + camera.name + "/" + time.asctime(time.localtime()) + " low fps"
+                writer.open(videoName, codec, 5, framesize, True)
+            elif distance < 0 and last_affirmed_2 < time.time() - 5:        #transition to state 1
+                    state = 1
+        elif state == 3:                                                  #state 3
+            if distance < 50 and distance >= 10:                            #no change
+                last_affirmed_3 = time.time()
+            elif distance < 10:                                             #transition to state 4
+                state = 4
+                last_affirmed_4 = time.time()
+                videoName = path + "/" + camera.name + "/" + time.asctime(time.localtime()) + " high fps"
+                writer.open(videoName, codec, 15, framesize, True)
+            elif distance < 0 and last_affirmed_3 < time.time() - 5:        #transition to state 1
+                state = 1
+                writer.release()
+            elif distance >= 50 and last_affirmed_3 < time.time() - 2:      #transition to state 2
+                state = 2
+                last_affirmed_2 = time.time()
+                writer.release()
+        elif state == 4:                                                  #state 4
+            if distance < 10 and distance >= 0:                              #no change
+                last_affirmed_4 = time.time()
+            elif distance < 0 and last_affirmed_4 < time.time() - 5:         #transition to state 1
+                state = 1
+                writer.release()
+            elif distance >= 10 and last_affirmed_4 < time.time() - 2:       #transition to state 3
+                state = 3
+                last_affirmed_3 = time.time()
+                videoName = path + "/" + camera.name + "/" + time.asctime(time.localtime()) + " low fps"
+                writer.open(videoName, codec, 5, framesize, True)
+
+#Will write to the file system with the correct data rate
+def save_footage(camera, path):
+    if camera.state == 4 or camera.state == 3: #these are the video capture mode. The writter handles the framerate
+        if camera.writer.isOpened:
+            _ , frame = camera.cap.read()
+            camera.writer(frame)
+        else:
+            print("Error: Camera mode dependent on writer was used without opening the writer. No video will be saved")
+    elif camera.state == 2: # 1/3 hz picture mode
+        if camera.last_pic_time < time.time() - 3: #only take a picture every 3 seconds
+            camera.last_pic_time = time.time()
+            _ , frame = camera.cap.read()
+            cv2.imwrite(path + "/" + camera.name + "/" + time.asctime(time.localtime()), frame)
+    #We don't do image capture on state 1 so there is nothing to do here
 
 #This should analyze one frame from the specified camera and give me the distance of the person in the frame. If there are
 #no people in the frame it should return -1. 
@@ -32,15 +100,18 @@ class camera_state:
 #it will also contain an atribute .data. This is the class you will create (detection_data) containing your across frame data
 def get_distance(camera):
     print("this is a placeholder Adam pls fill me in")
+    return 0
 
 def main():
     #setup
-    camera0 = camera_state("camera_0.avi", detection_data())
-    #camera1 = camera_state()
-    #camera2 = camera_state()
-    #camera3 = camera_state()
+    storage_path = "recordings"
+    #camera_0.avi & ect. are placeholders, they should really by be like /dev/video0
+    camera0 = camera_state("camera_0.avi", detection_data(), "camera0")
+    camera1 = camera_state("camera_1.avi", detection_data(), "camera1")
+    camera2 = camera_state("camera_2.avi", detection_data(), "camera2")
+    camera3 = camera_state("camera_3.avi", detection_data(), "camera3")
 
-    #cameras = [camera0, camera1, camera2, camera3]
+    cameras = [camera0, camera1, camera2, camera3]
 
     start_time = time.time()
 
@@ -62,8 +133,9 @@ def main():
     #Business logic
     program_terminate = False
     while not program_terminate:
-        _ , frame = camera0.cap.read()
-        outputVideo.write(frame)
+        for camera in cameras: 
+            camera.update_state(get_distance(camera))
+            save_footage(camera, storage_path)
 
         #end the program after 3 seconds
         if time.time() > start_time + 3:
