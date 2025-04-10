@@ -5,6 +5,7 @@
 import cv2
 import os
 import time
+import numpy as np
 
 #this will contain any data  for keeping variables between calls of get_distance
 class detection_data:
@@ -15,7 +16,7 @@ class camera_state:
     def __init__(self, source, data, name):
         self.source = source #source of the video feed
         self.cap = cv2.VideoCapture(source)
-        self.writer = cv3.VideoWriter()
+        self.writer = cv2.VideoWriter()
         self.codec = int(self.cap.get(cv2.CAP_PROP_FOURCC))
         self.framesize = (int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
         self.data = data #detection data storage
@@ -37,47 +38,47 @@ class camera_state:
     #logic for state changes, It is not neccessarily if distance setpoint hit chage state
     #See state trasnition table
     #Will update the VideoWriter (self.writer) to reflect the new framereate if needed
-    def update_state(distance)
-        if state == 0:                                                    #state 1
+    def update_state(self, distance):
+        if self.state == 0:                                                    #state 1
             if distance > 0:                                                #transition to 2
-                state = 2
-                last_affirmed_2 = time.time()
-        elif state == 2:                                                  #state 2
+                self.state = 2
+                self.last_affirmed_2 = time.time()
+        elif self.state == 2:                                                  #state 2
             if distance >= 50:                                              #no change
-                last_affirmed_2 = time.time()
+                self.last_affirmed_2 = time.time()
             elif distance < 50:                                             #transition to state 3
-                state = 3
-                last_affirmed_3 = time.time()
-                videoName = path + "/" + camera.name + "/" + time.asctime(time.localtime()) + " low fps"
-                writer.open(videoName, codec, 5, framesize, True)
-            elif distance < 0 and last_affirmed_2 < time.time() - 5:        #transition to state 1
-                    state = 1
-        elif state == 3:                                                  #state 3
+                self.state = 3
+                self.last_affirmed_3 = time.time()
+                videoName = path + "/" + self.name + "/" + time.asctime(time.localtime()) + " low fps"
+                self.writer.open(videoName, self.codec, 5, self.framesize, True)
+            elif distance < 0 and self.last_affirmed_2 < time.time() - 5:        #transition to state 1
+                    self.state = 1
+        elif self.state == 3:                                                  #state 3
             if distance < 50 and distance >= 10:                            #no change
-                last_affirmed_3 = time.time()
+                self.last_affirmed_3 = time.time()
             elif distance < 10:                                             #transition to state 4
-                state = 4
-                last_affirmed_4 = time.time()
-                videoName = path + "/" + camera.name + "/" + time.asctime(time.localtime()) + " high fps"
-                writer.open(videoName, codec, 15, framesize, True)
-            elif distance < 0 and last_affirmed_3 < time.time() - 5:        #transition to state 1
-                state = 1
-                writer.release()
-            elif distance >= 50 and last_affirmed_3 < time.time() - 2:      #transition to state 2
-                state = 2
-                last_affirmed_2 = time.time()
-                writer.release()
-        elif state == 4:                                                  #state 4
+                self.state = 4
+                self.last_affirmed_4 = time.time()
+                videoName = path + "/" + self.name + "/" + time.asctime(time.localtime()) + " high fps"
+                self.writer.open(videoName, self.codec, 15, self.framesize, True)
+            elif distance < 0 and self.last_affirmed_3 < time.time() - 5:        #transition to state 1
+                self.state = 1
+                self.writer.release()
+            elif distance >= 50 and self.last_affirmed_3 < time.time() - 2:      #transition to state 2
+                self.state = 2
+                self.last_affirmed_2 = time.time()
+                self.writer.release()
+        elif self.state == 4:                                                  #state 4
             if distance < 10 and distance >= 0:                              #no change
-                last_affirmed_4 = time.time()
-            elif distance < 0 and last_affirmed_4 < time.time() - 5:         #transition to state 1
-                state = 1
-                writer.release()
-            elif distance >= 10 and last_affirmed_4 < time.time() - 2:       #transition to state 3
-                state = 3
-                last_affirmed_3 = time.time()
-                videoName = path + "/" + camera.name + "/" + time.asctime(time.localtime()) + " low fps"
-                writer.open(videoName, codec, 5, framesize, True)
+                self.last_affirmed_4 = time.time()
+            elif distance < 0 and self.last_affirmed_4 < time.time() - 5:         #transition to state 1
+                self.state = 1
+                self.writer.release()
+            elif distance >= 10 and self.last_affirmed_4 < time.time() - 2:       #transition to state 3
+                self.state = 3
+                self.last_affirmed_3 = time.time()
+                videoName = path + "/" + self.name + "/" + time.asctime(time.localtime()) + " low fps"
+                self.writer.open(videoName, self.codec, 5, self.framesize, True)
 
 #Will write to the file system with the correct data rate
 def save_footage(camera, path):
@@ -94,17 +95,17 @@ def save_footage(camera, path):
             cv2.imwrite(path + "/" + camera.name + "/" + time.asctime(time.localtime()), frame)
     #We don't do image capture on state 1 so there is nothing to do here
 
-#This should analyze one frame from the specified camera and give me the distance of the person in the frame. If there are
-#no people in the frame it should return -1. 
-#camera_state class will contain an atribute .cap, this is your VideoCapture object
-#it will also contain an atribute .data. This is the class you will create (detection_data) containing your across frame data
-def get_distance(camera):
-    print("this is a placeholder Adam pls fill me in")
-    return 0
-
 def main():
     #setup
     storage_path = "recordings"
+
+    config_path = "./YOLO4TINY/yolov4-tiny.cfg"
+    weights_path = "./YOLO4TINY/yolov4-tiny.weights"
+
+    net = cv2.dnn.readNetFromDarknet(config_path, weights_path)
+    net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
+    net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
+
     #camera_0.avi & ect. are placeholders, they should really by be like /dev/video0
     camera0 = camera_state("camera_0.avi", detection_data(), "camera0")
     camera1 = camera_state("camera_1.avi", detection_data(), "camera1")
@@ -115,26 +116,11 @@ def main():
 
     start_time = time.time()
 
-    filename = "test_video.avi"
-    if os.path.exists(filename):
-        os.remove(filename)
-        print("old video deleted")
-
-    writer = cv2.VideoWriter()
-    codec = int(camera0.cap.get(cv2.CAP_PROP_FOURCC))
-    fps = camera0.cap.get(cv2.CAP_PROP_FPS)
-    framesize = (int(camera0.cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(camera0.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-    outputVideo = cv2.VideoWriter()
-    outputVideo.open("test_video.avi", codec, fps, framesize, True)
-    if not outputVideo.isOpened():
-        print("output video did not open")
-    frame = cv2.UMat()
-
     #Business logic
     program_terminate = False
     while not program_terminate:
         for camera in cameras: 
-            camera.update_state(get_distance(camera))
+            camera.update_state(poll_distance(camera, net))
             save_footage(camera, storage_path)
 
         #end the program after 3 seconds
@@ -152,10 +138,59 @@ def main():
 # This function should be 100% accurate on if there is a person or not
 # it should be within +-10m @ the 50m distance
 # it should be within +-5m @ the 10m mark
-# it will be ran once a second (this could be adjusted) for each camera, so it needs to complete in t < 0.25s
-# but should really complete in less than that to give the rest of the program time to run
-#def poll_distance(camera):
+def poll_distance(camera, net):
+    ret, frame = camera.cap.read()
 
+    height, width = frame.shape[:2]
+
+    # Create blob and perform forward pass
+    blob = cv2.dnn.blobFromImage(frame, 1/255.0, (416, 416), swapRB=True, crop=False)
+    net.setInput(blob)
+    outputs = net.forward(net.getUnconnectedOutLayersNames())
+
+    boxes = []
+    results = []
+    confidences = []
+
+    for output in outputs:
+        for detection in output:
+            scores = detection[5:]
+            class_id = np.argmax(scores)
+            confidence = scores[class_id]
+
+            # Only detect 'person' class (class_id = 0)
+            if class_id == 0 and confidence > 0.5:
+                center_x = int(detection[0] * width)
+                center_y = int(detection[1] * height)
+                w = int(detection[2] * width)
+                h = int(detection[3] * height)
+                x = int(center_x - w / 2)
+                y = int(center_y - h / 2)
+
+                boxes.append([x, y, w, h])
+                confidences.append(float(confidence))
+                results.append({
+                    'x': x,
+                    'y': y,
+                    'w': w,
+                    'h': h,
+                    'confidence': confidence
+                })
+
+    print(results)
+    # Non-max suppression to eliminate overlapping boxes
+    indices = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
+
+    if len(indices) > 0:
+        final_results = []
+        for i in indices:
+            i = i[0] if isinstance(i, int) else i
+            final_results.append(results[i])
+
+        return final_results
+    else:
+        return results
+        
 
 #Only run the main fucntion if this file is the one called
 if __name__ == "__main__":
