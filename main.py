@@ -96,6 +96,20 @@ def save_footage(camera, path):
             cv2.imwrite(path + "/" + camera.name + "/" + time.asctime(time.localtime()), frame)
     #We don't do image capture on state 1 so there is nothing to do here
 
+log = "activity_log.txt"
+
+def write_log_entry(message):
+    #Append a message to the log:
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+    log_entry = f"[{timestamp}] {message} \n"
+
+    with open(log, "a") as log:     #Open log in append mode 
+        log.write(log_entry)
+
+def wipe_log():
+    #Clear log
+    open(log, "w").close()
+
 def main():
     #setup
     storage_path = "recordings"
