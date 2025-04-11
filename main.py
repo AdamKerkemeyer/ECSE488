@@ -15,12 +15,13 @@ class detection_data:
 class camera_state:
     def __init__(self, source, data, name):
         self.source = source #source of the video feed
-        self.cap = cv2.VideoCapture(source)
+        cap = cv2.VideoCapture(source)
         self.writer = cv2.VideoWriter()
-        self.codec = int(self.cap.get(cv2.CAP_PROP_FOURCC))
-        self.framesize = (int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+        self.codec = int(cap.get(cv2.CAP_PROP_FOURCC))
+        self.framesize = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
         self.data = data #detection data storage
         self.name = name #name of the cammera
+        cap.release()
     #state is basically an emun
     #1: no person in frame
     #2: person in frame is farther than 50m
@@ -107,10 +108,10 @@ def main():
     net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
 
     #camera_0.avi & ect. are placeholders, they should really by be like /dev/video0
-    camera0 = camera_state("camera_0.avi", detection_data(), "camera0")
-    camera1 = camera_state("camera_1.avi", detection_data(), "camera1")
-    camera2 = camera_state("camera_2.avi", detection_data(), "camera2")
-    camera3 = camera_state("camera_3.avi", detection_data(), "camera3")
+    camera0 = camera_state(0, detection_data(), "camera0")
+    camera1 = camera_state(2, detection_data(), "camera1")
+    camera2 = camera_state(4, detection_data(), "camera2")
+    camera3 = camera_state(6, detection_data(), "camera3")
 
     cameras = [camera0, camera1, camera2, camera3]
 
@@ -119,13 +120,13 @@ def main():
     #Business logic
     program_terminate = False
     while not program_terminate:
-        for camera in cameras: 
-            camera.update_state(poll_distance(camera, net))
-            save_footage(camera, storage_path)
+         for camera in cameras: 
+             camera.update_state(poll_distance(camera, net))
+             save_footage(camera, storage_path)
 
         #end the program after 3 seconds
-        if time.time() > start_time + 3:
-            program_terminate = True
+      #  if time.time() > start_time + 3:
+       #     program_terminate = True
         
         
 
@@ -139,7 +140,8 @@ def main():
 # it should be within +-10m @ the 50m distance
 # it should be within +-5m @ the 10m mark
 def poll_distance(camera, net):
-    ret, frame = camera.cap.read()
+    cap = cv2.VideoCapture(camera.source)
+    ret, frame = cap.read()
 
     height, width = frame.shape[:2]
 
@@ -177,7 +179,7 @@ def poll_distance(camera, net):
                     'confidence': confidence
                 })
 
-    print(results)
+
     # Non-max suppression to eliminate overlapping boxes
     indices = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
 
@@ -186,11 +188,15 @@ def poll_distance(camera, net):
         for i in indices:
             i = i[0] if isinstance(i, int) else i
             final_results.append(results[i])
-
-        return final_results
+        results =  final_results
+    print(results)
+    if len(results) > 0:
+        distance = -0.03125*(results[0]['h'] - 700) + 20
+        print(distance)
+        return distance
     else:
-        return results
-        
+        print(-1)
+        return -1
 
 #Only run the main fucntion if this file is the one called
 if __name__ == "__main__":
