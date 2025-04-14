@@ -6,6 +6,12 @@ import cv2
 import os
 import time
 import numpy as np
+#for GUI
+import tkinter as tk
+from tkinter import scrolledtext #display log
+import threading
+
+pause_polling = False       #global flag to control if we are checking all cameras. Operates on human interrupt.
 
 #this will contain any data  for keeping variables between calls of get_distance
 class detection_data:
@@ -117,7 +123,7 @@ def main():
     config_path = "./YOLO4TINY/yolov4-tiny.cfg"
     weights_path = "./YOLO4TINY/yolov4-tiny.weights"
 
-    net = cv2.dnn.readNetFromDarknet(config_path, weights_path)
+    net = cv3.dnn.readNetFromDarknet(config_path, weights_path)
     net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
     net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
 
@@ -131,16 +137,19 @@ def main():
 
     start_time = time.time()
 
+    threading.Thread(target=open_gui, daemon=True).start()
+
     #Business logic
     program_terminate = False
     while not program_terminate:
-         for camera in cameras: 
-             camera.update_state(poll_distance(camera, net))
-             save_footage(camera, storage_path)
+        if not pause_polling:
+            for camera in cameras: 
+                camera.update_state(poll_distance(camera, net))
+                save_footage(camera, storage_path)
 
-        #end the program after 3 seconds
-      #  if time.time() > start_time + 3:
-       #     program_terminate = True
+                #end the program after 3 seconds
+                 #  if time.time() > start_time + 3:
+                #     program_terminate = True
         
         
 
@@ -211,6 +220,57 @@ def poll_distance(camera, net):
     else:
         print(-1)
         return -1
+
+#GUI Code:
+def show_live(source):
+    global pause_polling
+    pause_polling = True
+
+    cap = cv2.VideoCapture(source)
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        cv2.imshow(f"Camera {source}", frame)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+        cap.release()
+        cv2.destroyAllWindows()
+        pause_polling = False
+
+def open_gui():
+    def load_log():
+        try:
+            with open(log, "r") as log:
+                log_content = log.read()
+                log_view.delete(1.0, tk.END)
+                log_view.insert(tk.END, log_content)
+        except FileNotFoundError:
+            log_view.insert(tk.END, "Log file was not found / No log has been generated.")
+    
+    def launch_camera(index):
+        cam_sources = [0, 2, 4, 6]      #Not sure if I can do this with the camera objects you already made Evan
+        threading.Thread(target = show_live_, args=(cam_sources[index],), daemon=True).start()
+
+    gui = tk.Tk()
+    gui.title("Watchful Webcams Panel")
+
+    log_view = scrolledtext.ScrolledText(gui, width = 80, height = 20)      #Set log box size in GUI
+    log_view.pack(padx = 10, pady = 10)
+
+    btn_frame = tk.Frame(gui)
+    btn_frame.pack(pady = 10)
+
+    for i in range(4):                                                      #Make Buttons
+        tk.Button(btn_frame, text=f"Camera {i+1}", command=lambda i=i: launch_camera(i)).pack(side=tk.LEFT, padx=5)
+
+    refresh_btn = tk.Button(gui, text="Refresh Log", command=load_log)
+    refresh_btn.pack(pady=5)
+
+    load_log()
+    gui.mainloop()
+
 
 #Only run the main fucntion if this file is the one called
 if __name__ == "__main__":
