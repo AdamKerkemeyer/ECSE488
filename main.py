@@ -136,21 +136,26 @@ def main():
     cameras = [camera0, camera1, camera2, camera3]
 
     start_time = time.time()
-
-    threading.Thread(target=open_gui, daemon=True).start()
+    
+    #In order for program to work, tk must be in main thread, and business logic must be threaded.
 
     #Business logic
-    program_terminate = False
-    while not program_terminate:
-        if not pause_polling:
-            for camera in cameras: 
-                camera.update_state(poll_distance(camera, net))
-                save_footage(camera, storage_path)
+    program_terminate = False           #No longer using this value.
+    
+    def business_logic():
+        while True:
+            if not pause_polling:
+                for camera in cameras: 
+                    camera.update_state(poll_distance(camera, net))
+                    save_footage(camera, storage_path)
 
-                #end the program after 3 seconds
-                 #  if time.time() > start_time + 3:
-                #     program_terminate = True
-        
+                    #end the program after 3 seconds
+                    #  if time.time() > start_time + 3:
+                    #     program_terminate = True       
+
+    threading.Thread(target=business_logic, daemon=True).start()
+
+    open_gui()          #open GUI in the main thread.
         
 
 
@@ -227,6 +232,16 @@ def show_live(source):
     pause_polling = True
 
     cap = cv2.VideoCapture(source)
+
+    if not cap.isOpened():
+        print(f"Error, could not open camera {source}")
+        return
+
+    #Define parameters (Not necessary, can remove all of these)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+    cap.set(cv2.CAP_PROP_FPS, 10)
+
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -235,15 +250,15 @@ def show_live(source):
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-        cap.release()
-        cv2.destroyAllWindows()
-        pause_polling = False
+    cap.release()
+    cv2.destroyAllWindows()
+    pause_polling = False
 
 def open_gui():
     def load_log():
         try:
-            with open(log, "r") as log:
-                log_content = log.read()
+            with open(log, "r") as log_file:        #Names cannot match, log is global variable
+                log_content = log_file.read()
                 log_view.delete(1.0, tk.END)
                 log_view.insert(tk.END, log_content)
         except FileNotFoundError:
