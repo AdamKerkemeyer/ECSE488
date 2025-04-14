@@ -123,7 +123,7 @@ def main():
     config_path = "./YOLO4TINY/yolov4-tiny.cfg"
     weights_path = "./YOLO4TINY/yolov4-tiny.weights"
 
-    net = cv3.dnn.readNetFromDarknet(config_path, weights_path)
+    net = cv2.dnn.readNetFromDarknet(config_path, weights_path)
     net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
     net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
 
@@ -251,7 +251,7 @@ def open_gui():
     
     def launch_camera(index):
         cam_sources = [0, 2, 4, 6]      #Not sure if I can do this with the camera objects you already made Evan
-        threading.Thread(target = show_live_, args=(cam_sources[index],), daemon=True).start()
+        threading.Thread(target = show_live, args=(cam_sources[index],), daemon=True).start()
 
     gui = tk.Tk()
     gui.title("Watchful Webcams Panel")
