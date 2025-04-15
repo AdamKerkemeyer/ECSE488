@@ -36,3 +36,6 @@
 
 #Venv
 my-venv
+
+#Ignore recordings folder on local
+/recordings/
