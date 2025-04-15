@@ -8,7 +8,9 @@ import time
 import numpy as np
 #for GUI
 import tkinter as tk
-from tkinter import scrolledtext #display log
+from tkinter import scrolledtext
+
+from PIL import Image   #For PNG metadata strop to prevent libpng incorrect sRGB errors.
 import threading
 
 pause_polling = False       #global flag to control if we are checking all cameras. Operates on human interrupt.
@@ -18,21 +20,57 @@ class detection_data:
     def __init__(self):
         print("this is a placeholder Adam pls fill me in")
 
+def safe_open_cam(source, width = 640, height = 480, fps = 10):
+    cap = cv2.VideoCapture(source,cv2.CAP_V4L2)
+    if not cap.isOpened():
+        print(f"Error, could not open video source: {source}")
+        return None
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    cap.set(cv2.CAP_PROP_FPS, fps)
+    return cap
+
+#This should prevent the libpng incorrect sRGB errors, ultimately these files should be stored as JPEG.
+def safe_write_png(path, frame):
+    filename = time.strftime("%Y-%m-%d_%H-$M-%S") + ".png"
+    filepath = os.path.join(path, filename)
+    try:
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        img = Image.fromarray(rgb)
+        img.save(filepath, format="PNG", compress_level = 3)
+    except Exception as e:
+        print(f"Error, PNG save failed: {e}")
+
 class camera_state:
     def __init__(self, source, data, name):
-        self.source = source #source of the video feed
-        cap = cv2.VideoCapture(source)
+        self.source = source 
+        self.cap = safe_open_cam(source)
+        if self.cap is None:
+            #Something not working then, initialize framesize to default anyways
+            self.framesize = (640, 480)
+            self.codec = cv2.VideoWriter_fourcc(*'MJPG')
+        else:
+            self.framesize = (int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
+            self.codec = int(self.cap.get(cv2.CAP_PROP_FOURCC))
+            self.cap.release()
+
         self.writer = cv2.VideoWriter()
-        self.codec = int(cap.get(cv2.CAP_PROP_FOURCC))
-        self.framesize = (int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-        self.data = data #detection data storage
-        self.name = name #name of the cammera
-        cap.release()
+        self.data = data
+        self.name = name
+        
+        self.state = 1
+        self.last_pic_time = time.time()
+        self.last_affirmed_1 = time.time()
+        self.last_affirmed_2 = time.time()
+        self.last_affirmed_3 = time.time()
+"""
     #state is basically an emun
     #1: no person in frame
     #2: person in frame is farther than 50m
     #3: person in frame is inbetween 10m and 50m from cammera
-    #4: person in frame is closer than 10m
+    #4: person in frame is closer than 10m 
+""" 
+"""
     state = 1
     #last_pic_time is the time the last picuture was take so I can take a picture every 3 seconds
     last_pic_time = time.time()
@@ -40,33 +78,37 @@ class camera_state:
     last_affirmed_2 = time.time()
     last_affirmed_3 = time.time()
     last_affirmed_4 = time.time()
-
-
+"""
     #logic for state changes, It is not neccessarily if distance setpoint hit chage state
     #See state trasnition table
     #Will update the VideoWriter (self.writer) to reflect the new framereate if needed
     def update_state(self, distance):
-        if self.state == 0:                                                    #state 1
+        path = "recordings"
+        timestamp = time.strftime("%Y-%m-d_%H-%M-%S")
+
+        if self.state == 1:#Adam: did u mean state = 1 here not state == 0? #state 1 
             if distance > 0:                                                #transition to 2
                 self.state = 2
                 self.last_affirmed_2 = time.time()
-        elif self.state == 2:                                                  #state 2
+        elif self.state == 2:                                               #state 2
             if distance >= 50:                                              #no change
                 self.last_affirmed_2 = time.time()
             elif distance < 50:                                             #transition to state 3
                 self.state = 3
                 self.last_affirmed_3 = time.time()
-                videoName = path + "/" + self.name + "/" + time.asctime(time.localtime()) + " low fps"
+                videoName = os.path.join(path, self.name, f"{timestamp}_lowfps.avi")
+                #videoName = path+ "/" + self.name + "/" + time.asctime(time.localtime()) + " low fps"
                 self.writer.open(videoName, self.codec, 5, self.framesize, True)
             elif distance < 0 and self.last_affirmed_2 < time.time() - 5:        #transition to state 1
-                    self.state = 1
+                self.state = 1
         elif self.state == 3:                                                  #state 3
             if distance < 50 and distance >= 10:                            #no change
                 self.last_affirmed_3 = time.time()
             elif distance < 10:                                             #transition to state 4
                 self.state = 4
                 self.last_affirmed_4 = time.time()
-                videoName = path + "/" + self.name + "/" + time.asctime(time.localtime()) + " high fps"
+                videoName = os.path.join(path, self.name, f"{timestamp}_highfps.avi")
+                #videoName = path + "/" + self.name + "/" + time.asctime(time.localtime()) + " high fps"
                 self.writer.open(videoName, self.codec, 15, self.framesize, True)
             elif distance < 0 and self.last_affirmed_3 < time.time() - 5:        #transition to state 1
                 self.state = 1
@@ -84,22 +126,35 @@ class camera_state:
             elif distance >= 10 and self.last_affirmed_4 < time.time() - 2:       #transition to state 3
                 self.state = 3
                 self.last_affirmed_3 = time.time()
-                videoName = path + "/" + self.name + "/" + time.asctime(time.localtime()) + " low fps"
+                videoName = os.path.join(path, self.name, f"{timestamp}_lowfps.avi")
+                #videoName = path + "/" + self.name + "/" + time.asctime(time.localtime()) + " low fps"
                 self.writer.open(videoName, self.codec, 5, self.framesize, True)
 
 #Will write to the file system with the correct data rate
 def save_footage(camera, path):
-    if camera.state == 4 or camera.state == 3: #these are the video capture mode. The writter handles the framerate
+    cap = safe_open_cam(camera.source)
+    if cap is None:
+        print("Error in save footage function.")
+        return
+    ret, frame = cap.read()
+    cap.release()
+    if not ret
+        print("WARNING, Frame capture failed during save footage function.")
+        return
+
+    if camera.state in [3, 4]: #these are the video capture mode. The writter handles the framerate
         if camera.writer.isOpened:
-            _ , frame = camera.cap.read()
+            #_ , frame = camera.cap.read()
             camera.writer(frame)
         else:
             print("Error: Camera mode dependent on writer was used without opening the writer. No video will be saved")
-    elif camera.state == 2: # 1/3 hz picture mode
-        if camera.last_pic_time < time.time() - 3: #only take a picture every 3 seconds
+    elif camera.state == 2 and camera.last_pic_time < (time.time() - 3) : # 1/3 hz picture mode, only once ever 3 sec MAX
             camera.last_pic_time = time.time()
-            _ , frame = camera.cap.read()
-            cv2.imwrite(path + "/" + camera.name + "/" + time.asctime(time.localtime()), frame)
+           # _ , frame = camera.cap.read()
+           # cv2.imwrite(path + "/" + camera.name + "/" + time.asctime(time.localtime()), frame)
+           save_path = os.path.join(path, camera.name)
+           os.makedirs(save_path, exist_ok = True)
+           safe_write_png(save_path, frame)
     #We don't do image capture on state 1 so there is nothing to do here
 
 log = "activity_log.txt"
@@ -119,8 +174,7 @@ def wipe_log():
 def main():
     #setup
     storage_path = "recordings"
-
-    config_path = "./YOLO4TINY/yolov4-tiny.cfg"
+    config_path  = "./YOLO4TINY/yolov4-tiny.cfg"
     weights_path = "./YOLO4TINY/yolov4-tiny.weights"
 
     net = cv2.dnn.readNetFromDarknet(config_path, weights_path)
@@ -128,14 +182,14 @@ def main():
     net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
 
     #camera_0.avi & ect. are placeholders, they should really by be like /dev/video0
-    camera0 = camera_state(0, detection_data(), "camera0")
-    camera1 = camera_state(2, detection_data(), "camera1")
-    camera2 = camera_state(4, detection_data(), "camera2")
-    camera3 = camera_state(6, detection_data(), "camera3")
+    cameras = [
+        camera_state(0, detection_data(), "camera0"),
+        camera_state(2, detection_data(), "camera1"),
+        camera_state(4, detection_data(), "camera2"),
+        camera_state(6, detection_data(), "camera3")
+    ]
 
-    cameras = [camera0, camera1, camera2, camera3]
-
-    start_time = time.time()
+       start_time = time.time()
     
     #In order for program to work, tk must be in main thread, and business logic must be threaded.
 
@@ -168,8 +222,15 @@ def main():
 # it should be within +-10m @ the 50m distance
 # it should be within +-5m @ the 10m mark
 def poll_distance(camera, net):
-    cap = cv2.VideoCapture(camera.source)
+    cap = safe_open_cam(camera.source)
+    if cap is None:
+        return -2   #Already return -1 if no person detected
+    #cap = cv2.VideoCapture(camera.source)
     ret, frame = cap.read()
+    cap.release()       #poll distance was missing this cap release!
+
+    if not ret or frame is None:
+        return -3
 
     height, width = frame.shape[:2]
 
@@ -178,9 +239,7 @@ def poll_distance(camera, net):
     net.setInput(blob)
     outputs = net.forward(net.getUnconnectedOutLayersNames())
 
-    boxes = []
-    results = []
-    confidences = []
+    boxes, results, confidences = [], [], []
 
     for output in outputs:
         for detection in output:
@@ -199,13 +258,7 @@ def poll_distance(camera, net):
 
                 boxes.append([x, y, w, h])
                 confidences.append(float(confidence))
-                results.append({
-                    'x': x,
-                    'y': y,
-                    'w': w,
-                    'h': h,
-                    'confidence': confidence
-                })
+                results.append({'x': x, 'y': y, 'w': w,'h': h,'confidence': confidence})
 
 
     # Non-max suppression to eliminate overlapping boxes
@@ -231,16 +284,15 @@ def show_live(source):
     global pause_polling
     pause_polling = True
 
-    cap = cv2.VideoCapture(source)
-
-    if not cap.isOpened():
-        print(f"Error, could not open camera {source}")
+    cap = safe_open_cam(source)
+    if cap is None:
+        print("ERROR, show live camera button failed to open camera {source}")
         return
-
+    
     #Define parameters (Not necessary, can remove all of these)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-    cap.set(cv2.CAP_PROP_FPS, 10)
+    #cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    #cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    #cap.set(cv2.CAP_PROP_FPS, 10)
 
     while True:
         ret, frame = cap.read()
@@ -262,7 +314,7 @@ def open_gui():
                 log_view.delete(1.0, tk.END)
                 log_view.insert(tk.END, log_content)
         except FileNotFoundError:
-            log_view.insert(tk.END, "Log file was not found / No log has been generated.")
+            log_view.insert(tk.END, "Log file was not found / No log has been generated.\n")
     
     def launch_camera(index):
         cam_sources = [0, 2, 4, 6]      #Not sure if I can do this with the camera objects you already made Evan
