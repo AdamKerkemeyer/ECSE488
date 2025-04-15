@@ -60,16 +60,76 @@ class camera_state:
         
         self.state = 1
         self.last_pic_time = time.time()
-        self.last_affirmed_1 = time.time()
         self.last_affirmed_2 = time.time()
         self.last_affirmed_3 = time.time()
-"""
+        self.last_affirmed_4 = time.time()
     #state is basically an emun
     #1: no person in frame
     #2: person in frame is farther than 50m
     #3: person in frame is inbetween 10m and 50m from cammera
     #4: person in frame is closer than 10m 
-""" 
+
+    #logic for state changes, It is not neccessarily if distance setpoint hit chage state
+    #See state trasnition table
+    #Will update the VideoWriter (self.writer) to reflect the new framereate if needed
+    def update_state(self, distance):
+        path = "recordings"
+        timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+
+        if self.state == 1:#Adam: did u mean state = 1 here not state == 0? #state 1 
+            if distance > 0:                                                #transition to 2
+                self.state = 2
+                self.last_affirmed_2 = time.time()
+                write_log_entry(f"{self.name}: State changed from 1 to 2, person detected at {distance:.2f}m")
+        elif self.state == 2:                                               #state 2
+            if distance >= 50:                                              #no change
+                self.last_affirmed_2 = time.time()
+            elif distance < 50:                                             #transition to state 3
+                self.state = 3
+                self.last_affirmed_3 = time.time()
+                os.makedirs(os.path.join(path, self.name), exist_ok = True)
+                videoName = os.path.join(path, self.name, f"{timestamp}_lowfps.avi")
+                #videoName = path+ "/" + self.name + "/" + time.asctime(time.localtime()) + " low fps"
+                self.writer.open(videoName, self.codec, 5, self.framesize, True)
+                write_log_entry(f"{self.name}: State changed from 2 to 3, person detected at {distance:.2f}m, video started: {videoName}")
+            elif distance < 0 and self.last_affirmed_2 < time.time() - 5:        #transition to state 1
+                self.state = 1
+                write_log_entry(f"{self.name}: State fallback (2 to 1), no person detected")
+        elif self.state == 3:                                                  #state 3
+            if distance < 50 and distance >= 10:                            #no change
+                self.last_affirmed_3 = time.time()
+            elif distance < 10:                                             #transition to state 4
+                self.state = 4
+                self.last_affirmed_4 = time.time()
+                os.makedirs(os.path.join(path, self.name), exist_ok = True)
+                videoName = os.path.join(path, self.name, f"{timestamp}_highfps.avi")
+                #videoName = path + "/" + self.name + "/" + time.asctime(time.localtime()) + " high fps"
+                self.writer.open(videoName, self.codec, 15, self.framesize, True)
+                write_log_entry(f"{self.name}: State changed from 3 to 4, person detected at {distance:.2f}m, video started: {videoName}")
+            elif distance < 0 and self.last_affirmed_3 < time.time() - 5:        #transition to state 1
+                self.state = 1
+                self.writer.release()
+                write_log_entry(f"{self.name}: State fallback (3 to 1), no person detected, video writer released")
+            elif distance >= 50 and self.last_affirmed_3 < time.time() - 2:      #transition to state 2
+                self.state = 2
+                self.last_affirmed_2 = time.time()
+                self.writer.release()
+                write_log_entry(f"{self.name}: State fallback (3 to 2), no person detected, video writer released")
+        elif self.state == 4:                                                  #state 4
+            if distance < 10 and distance >= 0:                              #no change
+                self.last_affirmed_4 = time.time()
+            elif distance < 0 and self.last_affirmed_4 < time.time() - 5:         #transition to state 1
+                self.state = 1
+                self.writer.release()
+                write_log_entry(f"{self.name}: State fallback (4 to 1), no person detected, video writer released")
+            elif distance >= 10 and self.last_affirmed_4 < time.time() - 2:       #transition to state 3
+                self.state = 3
+                self.last_affirmed_3 = time.time()
+                os.makedirs(os.path.join(path, self.name), exist_ok = True)
+                videoName = os.path.join(path, self.name, f"{timestamp}_lowfps.avi")
+                #videoName = path + "/" + self.name + "/" + time.asctime(time.localtime()) + " low fps"
+                self.writer.open(videoName, self.codec, 5, self.framesize, True)
+                write_log_entry(f"{self.name}: State fallback (4 to 3), no person detected, video started: {videoName}")
 """
     state = 1
     #last_pic_time is the time the last picuture was take so I can take a picture every 3 seconds
@@ -79,57 +139,6 @@ class camera_state:
     last_affirmed_3 = time.time()
     last_affirmed_4 = time.time()
 """
-    #logic for state changes, It is not neccessarily if distance setpoint hit chage state
-    #See state trasnition table
-    #Will update the VideoWriter (self.writer) to reflect the new framereate if needed
-    def update_state(self, distance):
-        path = "recordings"
-        timestamp = time.strftime("%Y-%m-d_%H-%M-%S")
-
-        if self.state == 1:#Adam: did u mean state = 1 here not state == 0? #state 1 
-            if distance > 0:                                                #transition to 2
-                self.state = 2
-                self.last_affirmed_2 = time.time()
-        elif self.state == 2:                                               #state 2
-            if distance >= 50:                                              #no change
-                self.last_affirmed_2 = time.time()
-            elif distance < 50:                                             #transition to state 3
-                self.state = 3
-                self.last_affirmed_3 = time.time()
-                videoName = os.path.join(path, self.name, f"{timestamp}_lowfps.avi")
-                #videoName = path+ "/" + self.name + "/" + time.asctime(time.localtime()) + " low fps"
-                self.writer.open(videoName, self.codec, 5, self.framesize, True)
-            elif distance < 0 and self.last_affirmed_2 < time.time() - 5:        #transition to state 1
-                self.state = 1
-        elif self.state == 3:                                                  #state 3
-            if distance < 50 and distance >= 10:                            #no change
-                self.last_affirmed_3 = time.time()
-            elif distance < 10:                                             #transition to state 4
-                self.state = 4
-                self.last_affirmed_4 = time.time()
-                videoName = os.path.join(path, self.name, f"{timestamp}_highfps.avi")
-                #videoName = path + "/" + self.name + "/" + time.asctime(time.localtime()) + " high fps"
-                self.writer.open(videoName, self.codec, 15, self.framesize, True)
-            elif distance < 0 and self.last_affirmed_3 < time.time() - 5:        #transition to state 1
-                self.state = 1
-                self.writer.release()
-            elif distance >= 50 and self.last_affirmed_3 < time.time() - 2:      #transition to state 2
-                self.state = 2
-                self.last_affirmed_2 = time.time()
-                self.writer.release()
-        elif self.state == 4:                                                  #state 4
-            if distance < 10 and distance >= 0:                              #no change
-                self.last_affirmed_4 = time.time()
-            elif distance < 0 and self.last_affirmed_4 < time.time() - 5:         #transition to state 1
-                self.state = 1
-                self.writer.release()
-            elif distance >= 10 and self.last_affirmed_4 < time.time() - 2:       #transition to state 3
-                self.state = 3
-                self.last_affirmed_3 = time.time()
-                videoName = os.path.join(path, self.name, f"{timestamp}_lowfps.avi")
-                #videoName = path + "/" + self.name + "/" + time.asctime(time.localtime()) + " low fps"
-                self.writer.open(videoName, self.codec, 5, self.framesize, True)
-
 #Will write to the file system with the correct data rate
 def save_footage(camera, path):
     cap = safe_open_cam(camera.source)
@@ -138,24 +147,24 @@ def save_footage(camera, path):
         return
     ret, frame = cap.read()
     cap.release()
-    if not ret
+    if not ret:
         print("WARNING, Frame capture failed during save footage function.")
         return
 
     if camera.state in [3, 4]: #these are the video capture mode. The writter handles the framerate
-        if camera.writer.isOpened:
+        if camera.writer.isOpened():
             #_ , frame = camera.cap.read()
-            camera.writer(frame)
+            camera.writer.write(frame)
         else:
             print("Error: Camera mode dependent on writer was used without opening the writer. No video will be saved")
     elif camera.state == 2 and camera.last_pic_time < (time.time() - 3) : # 1/3 hz picture mode, only once ever 3 sec MAX
-            camera.last_pic_time = time.time()
-           # _ , frame = camera.cap.read()
-           # cv2.imwrite(path + "/" + camera.name + "/" + time.asctime(time.localtime()), frame)
-           save_path = os.path.join(path, camera.name)
-           os.makedirs(save_path, exist_ok = True)
-           safe_write_png(save_path, frame)
-    #We don't do image capture on state 1 so there is nothing to do here
+        camera.last_pic_time = time.time()
+        # _ , frame = camera.cap.read()
+        # cv2.imwrite(path + "/" + camera.name + "/" + time.asctime(time.localtime()), frame)
+        save_path = os.path.join(path, camera.name)
+        os.makedirs(save_path, exist_ok = True)
+        safe_write_png(save_path, frame)
+        #We don't do image capture on state 1 so there is nothing to do here
 
 log = "activity_log.txt"
 
@@ -164,8 +173,8 @@ def write_log_entry(message):
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     log_entry = f"[{timestamp}] {message} \n"
 
-    with open(log, "a") as log:     #Open log in append mode 
-        log.write(log_entry)
+    with open(log, "a") as log_file:     #Open log in append mode 
+        log_file.write(log_entry)
 
 def wipe_log():
     #Clear log
@@ -188,8 +197,7 @@ def main():
         camera_state(4, detection_data(), "camera2"),
         camera_state(6, detection_data(), "camera3")
     ]
-
-       start_time = time.time()
+    start_time = time.time()
     
     #In order for program to work, tk must be in main thread, and business logic must be threaded.
 
@@ -314,8 +322,14 @@ def open_gui():
                 log_view.delete(1.0, tk.END)
                 log_view.insert(tk.END, log_content)
         except FileNotFoundError:
+            log_view.delete(1.0, tk.END)
             log_view.insert(tk.END, "Log file was not found / No log has been generated.\n")
-    
+
+    def clear_log():
+        wipe_log()
+        log_view.delete(1.0, tk.END)
+        log_view.insert(tk.END, "LOG CLEARED\n")
+
     def launch_camera(index):
         cam_sources = [0, 2, 4, 6]      #Not sure if I can do this with the camera objects you already made Evan
         threading.Thread(target = show_live, args=(cam_sources[index],), daemon=True).start()
@@ -334,6 +348,8 @@ def open_gui():
 
     refresh_btn = tk.Button(gui, text="Refresh Log", command=load_log)
     refresh_btn.pack(pady=5)
+    clear_btn = tk.Button(gui, text="Clear Log", command=clear_log)
+    clear_btn.pack(pady=5)
 
     load_log()
     gui.mainloop()
