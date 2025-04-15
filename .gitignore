@@ -39,3 +39,7 @@ my-venv
 
 #Ignore recordings folder on local
 /recordings/
+
+#Ignore pycache
+/_pycache_/
+/__pycache__/
