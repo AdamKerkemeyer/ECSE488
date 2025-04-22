@@ -1,0 +1,1 @@
+[2025-04-22 16:41:09] camera1: State changed from 1 to 2, person detected at 41.19m 

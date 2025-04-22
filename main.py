@@ -16,6 +16,7 @@ import contextlib
 import sys                          #Not sure this is necessary
 
 pause_polling = False       #global flag to control if we are checking all cameras. Operates on human interrupt.
+net = None
 
 #this will contain any data  for keeping variables between calls of get_distance
 class detection_data:
@@ -25,7 +26,7 @@ class detection_data:
 def safe_open_cam(source, width = 640, height = 480, fps = 10):
     # temporarily silence all stderr output, this prevents warnings that the camera is in use popping up when you  try to access the camera with the GUI but the camera is currently being polled
     with open(os.devnull, 'w') as devnull, contextlib.redirect_stderr(devnull):
-        cap = cv2.VideoCapture(source, cv2.CAP_V4L2)
+        cap = cv2.VideoCapture(source, cv2.CAP_V4L2)  #Dropped specific V4L2 specification to let openCV autoselect
 
     if not cap.isOpened():
         print(f"Error, could not open video source: {source}")
@@ -187,6 +188,7 @@ def wipe_log():
 
 def main():
     #setup
+    global net
     storage_path = "recordings"
     config_path  = "./YOLO4TINY/yolov4-tiny.cfg"
     weights_path = "./YOLO4TINY/yolov4-tiny.weights"
@@ -298,7 +300,7 @@ def poll_distance(camera, net):
 #GUI Code:
 '''
 def show_live(source):
-    global pause_polling
+    global pause_polling, net
     pause_polling = True
 
     cap = safe_open_cam(source)
@@ -368,7 +370,7 @@ def open_camera_window(camera, parent):
     top = Toplevel(parent)
     top.title(f"Live: {camera.name}")
     waiting_lbl = Label(top, text=f"waiting for camera to become avaliable...")
-    waiting_lbl.pack
+    waiting_lbl.pack()
 
     stop = threading.Event()
 
@@ -401,8 +403,6 @@ def open_camera_window(camera, parent):
         return
 
     def update_frame():
-        print("stderr closed?", sys.stderr.closed)  #Used for debugging
-
         if stop.is_set():
             return
         ret, frame = cap.read()
