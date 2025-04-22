@@ -1,1 +1,5 @@
-[2025-04-22 16:41:09] camera1: State changed from 1 to 2, person detected at 41.19m 
+[2025-04-22 17:41:53] camera2: State changed from 1 to 2, person detected at 41.69m 
+[2025-04-22 17:45:32] camera3: State changed from 1 to 2, person detected at 26.62m 
+[2025-04-22 17:56:55] camera3: State changed from 1 to 2, person detected at 40.69m 
+[2025-04-22 18:01:09] camera1: State changed from 1 to 2, person detected at 30.28m 
+[2025-04-22 18:01:14] camera3: State changed from 1 to 2, person detected at 38.66m 

@@ -9,6 +9,7 @@ import numpy as np
 #for GUI
 import tkinter as tk
 from tkinter import scrolledtext, Toplevel, Label
+import math
 
 from PIL import Image, ImageTk      #For PNG metadata strop to prevent libpng incorrect sRGB errors.
 import threading
@@ -402,48 +403,61 @@ def open_camera_window(camera, parent):
         on_close()
         return
 
+    window_start = time.time()
+    warmup_duration = 2.0
     def update_frame():
         if stop.is_set():
             return
         ret, frame = cap.read()
-        if ret:
+        if ret and frame is not None:
+            if time.time() - window_start < warmup_duration:
+                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                img = ImageTk.PhotoImage(Image.fromarray(rgb))
+                lbl.imgtk = img
+                lbl.config(image=img)
+                lbl.after(30, update_frame)
+                return
+
             height, width = frame.shape[:2]
-            blob = cv2.dnn.blobFromImage(frame, 1/255.0, (416, 416),
-                                         swapRB=True, crop=False)
+            # Create blob and forward pass
+            blob = cv2.dnn.blobFromImage(frame, 1/255.0, (416, 416), swapRB=True, crop=False)
             net.setInput(blob)
             outputs = net.forward(net.getUnconnectedOutLayersNames())
 
             boxes, confidences = [], []
             for output in outputs:
                 for detection in output:
-                    scores    = detection[5:]
-                    class_id  = np.argmax(scores)
-                    confidence= scores[class_id]
+                    scores = detection[5:]
+                    class_id = np.argmax(scores)
+                    confidence = float(scores[class_id])
                     if class_id == 0 and confidence > 0.5:
-                        cx = int(detection[0] * width)
-                        cy = int(detection[1] * height)
-                        w  = int(detection[2] * width)
-                        h  = int(detection[3] * height)
-                        x  = cx - w//2
-                        y  = cy - h//2
+                        if not (math.isfinite(detection[2]) and math.isfinite(detection[3])):
+                            continue
+                        w_rel, h_rel = detection[2], detection[3]
+                        if w_rel <= 0 or h_rel <= 0 or w_rel > 1 or h_rel > 1:
+                            continue
+                        cx, cy = detection[0] * width, detection[1] * height
+                        w, h = int(w_rel * width), int(h_rel * height)
+                        x, y = int(cx - w / 2), int(cy - h / 2)
+                        x, y = max(0, x), max(0, y)
+                        w = min(w, width - x)
+                        h = min(h, height - y)
                         boxes.append([x, y, w, h])
-                        confidences.append(float(confidence))
+                        confidences.append(confidence)
 
-            idxs = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
-            if len(idxs) > 0:
-                for i in idxs.flatten():
-                    x, y, w, h = boxes[i]
-                    cv2.rectangle(frame, (x, y), (x + w, y + h),
-                                  (0, 0, 255), 2)
-                    cv2.putText(frame, f"Person {confidences[i]*100:.1f}%",
-                                (x, y - 10),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                                (0, 0, 255), 2)
-            #Convert to Tk Image
-            img = ImageTk.PhotoImage(
-                    Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            )
-            lbl.img = img
+            indices = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
+            if len(indices) > 0:
+                idx_list = indices.flatten() if hasattr(indices, 'flatten') else indices
+                first_idx = idx_list[0]
+                x, y, w, h = boxes[first_idx]
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                cv2.putText(frame, f"Person: {confidences[first_idx]:.2f}", (x, y - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+
+            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            img = ImageTk.PhotoImage(Image.fromarray(rgb))
+            lbl.imgtk = img
             lbl.config(image=img)
         # schedule next frame
         lbl.after(30, update_frame)
