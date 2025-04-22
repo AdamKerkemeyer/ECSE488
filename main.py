@@ -13,16 +13,13 @@ import math
 
 from PIL import Image, ImageTk      #For PNG metadata strop to prevent libpng incorrect sRGB errors.
 import threading
+import queue
 import contextlib
 import sys                          #Not sure this is necessary
 
 pause_polling = False       #global flag to control if we are checking all cameras. Operates on human interrupt.
 net = None
 
-#this will contain any data  for keeping variables between calls of get_distance
-class detection_data:
-    def __init__(self):
-        print("this is a placeholder Adam pls fill me in")
 
 def safe_open_cam(source, width = 640, height = 480, fps = 10):
     # temporarily silence all stderr output, this prevents warnings that the camera is in use popping up when you  try to access the camera with the GUI but the camera is currently being polled
@@ -49,10 +46,11 @@ def safe_write_png(path, frame):
         print(f"Error, PNG save failed: {e}")
 
 class camera_state:
-    def __init__(self, source, data, name):
+    def __init__(self, source, name):
         self.source = source 
-        self.cap = safe_open_cam(source)
+        self.cap = VideoCapture(source)
         if self.cap is None:
+            print("unable to open {name} in camera_state __init__()")
             #Something not working then, initialize framesize to default anyways
             self.framesize = (640, 480)
             self.codec = cv2.VideoWriter_fourcc(*'MJPG')
@@ -62,11 +60,10 @@ class camera_state:
             self.cap.release()
 
         self.writer = cv2.VideoWriter()
-        self.data = data
         self.name = name
         
         self.state = 1
-        self.last_pic_time = time.time()
+        #self.last_pic_time = time.time()
         self.last_affirmed_2 = time.time()
         self.last_affirmed_3 = time.time()
         self.last_affirmed_4 = time.time()
@@ -75,6 +72,9 @@ class camera_state:
     #2: person in frame is farther than 50m
     #3: person in frame is inbetween 10m and 50m from cammera
     #4: person in frame is closer than 10m 
+        
+        self.last_saved_frame_time = 0 #the last absolute time a frame from this camera was saved
+        self.save_frame_period_s = 3 #the period in seconds to save frames/photos from this camera
 
     #logic for state changes, It is not neccessarily if distance setpoint hit chage state
     #See state trasnition table
@@ -87,6 +87,7 @@ class camera_state:
             if distance > 0:                                                #transition to 2
                 self.state = 2
                 self.last_affirmed_2 = time.time()
+                self.save_frame_period_s = 3
                 write_log_entry(f"{self.name}: State changed from 1 to 2, person detected at {distance:.2f}m")
         elif self.state == 2:                                               #state 2
             if distance >= 50:                                              #no change
@@ -98,6 +99,7 @@ class camera_state:
                 videoName = os.path.join(path, self.name, f"{timestamp}_lowfps.avi")
                 #videoName = path+ "/" + self.name + "/" + time.asctime(time.localtime()) + " low fps"
                 self.writer.open(videoName, self.codec, 5, self.framesize, True)
+                self.save_frame_period_s = 0.2 #1/5
                 write_log_entry(f"{self.name}: State changed from 2 to 3, person detected at {distance:.2f}m, video started: {videoName}")
             elif distance < 0 and self.last_affirmed_2 < time.time() - 5:        #transition to state 1
                 self.state = 1
@@ -112,6 +114,7 @@ class camera_state:
                 videoName = os.path.join(path, self.name, f"{timestamp}_highfps.avi")
                 #videoName = path + "/" + self.name + "/" + time.asctime(time.localtime()) + " high fps"
                 self.writer.open(videoName, self.codec, 15, self.framesize, True)
+                self.save_frame_period_s = 0.0666666666667 #1/15
                 write_log_entry(f"{self.name}: State changed from 3 to 4, person detected at {distance:.2f}m, video started: {videoName}")
             elif distance < 0 and self.last_affirmed_3 < time.time() - 5:        #transition to state 1
                 self.state = 1
@@ -121,6 +124,7 @@ class camera_state:
                 self.state = 2
                 self.last_affirmed_2 = time.time()
                 self.writer.release()
+                self.save_frame_period_s = 3
                 write_log_entry(f"{self.name}: State fallback (3 to 2), no person detected, video writer released")
         elif self.state == 4:                                                  #state 4
             if distance < 10 and distance >= 0:                              #no change
@@ -136,6 +140,7 @@ class camera_state:
                 videoName = os.path.join(path, self.name, f"{timestamp}_lowfps.avi")
                 #videoName = path + "/" + self.name + "/" + time.asctime(time.localtime()) + " low fps"
                 self.writer.open(videoName, self.codec, 5, self.framesize, True)
+                self.save_frame_period_s = 0.2 #1/5
                 write_log_entry(f"{self.name}: State fallback (4 to 3), no person detected, video started: {videoName}")
 """
     state = 1
@@ -187,50 +192,6 @@ def wipe_log():
     #Clear log
     open(log, "w").close()
 
-def main():
-    #setup
-    global net
-    storage_path = "recordings"
-    config_path  = "./YOLO4TINY/yolov4-tiny.cfg"
-    weights_path = "./YOLO4TINY/yolov4-tiny.weights"
-
-    net = cv2.dnn.readNetFromDarknet(config_path, weights_path)
-    net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
-    net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
-
-    #camera_0.avi & ect. are placeholders, they should really by be like /dev/video0
-    cameras = [
-        camera_state(0, detection_data(), "camera0"),
-        camera_state(2, detection_data(), "camera1"),
-        camera_state(4, detection_data(), "camera2"),
-        camera_state(6, detection_data(), "camera3")
-    ]
-    start_time = time.time()
-    
-    #In order for program to work, tk must be in main thread, and business logic must be threaded.
-
-    #Business logic
-        
-    def business_logic():
-        while True:
-            if pause_polling:
-                time.sleep(0.2)
-                continue
-            for camera in cameras:
-                d = poll_distance(camera, net)
-                camera.update_state(d)
-                save_footage(camera, storage_path)
-
-                    #end the program after 3 seconds
-                    #  if time.time() > start_time + 3:
-                    #     program_terminate = True  
-            time.sleep(0.01) #throttle CPU
-
-    threading.Thread(target=business_logic, daemon=True).start()
-
-    open_gui(cameras)          #open GUI in the main thread.
-        
-
 
 
 #polls the video feed of camera and returns the distance of a target in meters
@@ -240,16 +201,16 @@ def main():
 # This function should be 100% accurate on if there is a person or not
 # it should be within +-10m @ the 50m distance
 # it should be within +-5m @ the 10m mark
-def poll_distance(camera, net):
-    cap = safe_open_cam(camera.source)
-    if cap is None:
-        return -2   #Already return -1 if no person detected
-    #cap = cv2.VideoCapture(camera.source)
-    ret, frame = cap.read()
-    cap.release()       #poll distance was missing this cap release!
+def poll_distance(frame, net):
+    #cap = safe_open_cam(camera.source)
+    #if cap is None:
+    #    return -2   #Already return -1 if no person detected
+    ##cap = cv2.VideoCapture(camera.source)
+    #ret, frame = cap.read()
+    #cap.release()       #poll distance was missing this cap release!
 
-    if not ret or frame is None:
-        return -3
+    #if not ret or frame is None:
+    #    return -3
 
     height, width = frame.shape[:2]
 
@@ -463,6 +424,103 @@ def open_camera_window(camera, parent):
         lbl.after(30, update_frame)
 
     update_frame()
+
+def main():
+    #setup
+    global net
+    storage_path = "recordings"
+    config_path  = "./YOLO4TINY/yolov4-tiny.cfg"
+    weights_path = "./YOLO4TINY/yolov4-tiny.weights"
+
+    net = cv2.dnn.readNetFromDarknet(config_path, weights_path)
+    net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
+    net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
+
+    main_to_poll_q = queue.Queue()
+    poll_to_main_q = queue.Queue()
+
+    
+
+    #camera_0.avi & ect. are placeholders, they should really by be like /dev/video0
+    cameras = [
+        camera_state(0, "camera0"),
+        camera_state(2, "camera1"),
+        camera_state(4, "camera2"),
+        camera_state(6, "camera3")
+    ]
+    start_time = time.time()
+    current_polling_camera = 0
+
+    ## Program Structure: in main thread while: Check queue for new data. If it is detected: resart polling thread by
+
+    #Business logic
+
+    threading.Thread(target=Run_Polling_Thread, args=(main_to_poll_q, poll_to_main_q), daemon=True).start()
+        
+    open_gui(cameras)          #open GUI in the main thread.
+
+    while True:
+        #possibly get a value from the polling function
+        new_distance = False
+        try:
+            distance = poll_to_main_q.get(block=False) #check if there is anything in the incoming queue
+        except queue.Empty:
+            new_distance = True
+
+
+        if new_distance:
+            #update state with new distance
+            camera[current_polling_camera].update_state(distance)
+
+            #time to set polling working on another frame
+            current_polling_camera += 1
+            if current_polling_camera == 4: #wrap around
+                current_polling_camera = 0
+            ret, frame = cameras[current_polling_camera].cap.read()
+            main_to_poll_q.put(frame, block=False)
+            
+        #write to video/photo outputs if the time is right
+        for camera in cameras:
+            current_time = time.time()
+            if camera.state != 1 and camera.last_saved_frame_time + camera.save_frame_period_s <= current_time: #time to write to storage
+                camera.last_saved_frame_time += camera.save_frame_period_s
+                
+                #Write the frame/photo
+                ret, frame = camera.cap.read()
+                if camera.state == 2: #picture mode
+                    timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+                    img_name = os.path.join(path, self.name, f"{timestamp}_highfps.avi")
+                    safe_write_png(img_name, frame)
+                else: #video mode
+                    camera.writer.write(frame)
+    
+        
+        
+        #if pause_polling:
+        #    time.sleep(0.2)
+        #    continue
+        #for camera in cameras:
+        #    d = poll_distance(camera, net)
+        #    camera.update_state(d)
+        #    save_footage(camera, storage_path)
+
+                #end the program after 3 seconds
+                #  if time.time() > start_time + 3:
+                #     program_terminate = True  
+        #time.sleep(0.01) #throttle CPU
+
+    #threading.Thread(target=business_logic, daemon=True).start()
+
+    #
+
+def Run_Polling_Thread(main_to_poll_q, poll_to_main_q):
+    while True:
+        frame = main_to_poll_q.get() #get() will wait here until an item is added to the queue
+        d = poll_distance(frame, net)
+        poll_to_main_q.put(d, block=False)#send d to main
+        main_to_poll_q.task_done() #indicate to the queue that the task is done
+
+
 
 #Only run the main fucntion if this file is the one called
 if __name__ == "__main__":
