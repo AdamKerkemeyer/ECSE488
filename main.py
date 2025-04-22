@@ -10,9 +10,10 @@ import numpy as np
 import tkinter as tk
 from tkinter import scrolledtext, Toplevel, Label
 
-from PIL import Image, ImageTk   #For PNG metadata strop to prevent libpng incorrect sRGB errors.
+from PIL import Image, ImageTk      #For PNG metadata strop to prevent libpng incorrect sRGB errors.
 import threading
 import contextlib
+import sys                          #Not sure this is necessary
 
 pause_polling = False       #global flag to control if we are checking all cameras. Operates on human interrupt.
 
@@ -400,10 +401,45 @@ def open_camera_window(camera, parent):
         return
 
     def update_frame():
+        print("stderr closed?", sys.stderr.closed)  #Used for debugging
+
         if stop.is_set():
             return
         ret, frame = cap.read()
         if ret:
+            height, width = frame.shape[:2]
+            blob = cv2.dnn.blobFromImage(frame, 1/255.0, (416, 416),
+                                         swapRB=True, crop=False)
+            net.setInput(blob)
+            outputs = net.forward(net.getUnconnectedOutLayersNames())
+
+            boxes, confidences = [], []
+            for output in outputs:
+                for detection in output:
+                    scores    = detection[5:]
+                    class_id  = np.argmax(scores)
+                    confidence= scores[class_id]
+                    if class_id == 0 and confidence > 0.5:
+                        cx = int(detection[0] * width)
+                        cy = int(detection[1] * height)
+                        w  = int(detection[2] * width)
+                        h  = int(detection[3] * height)
+                        x  = cx - w//2
+                        y  = cy - h//2
+                        boxes.append([x, y, w, h])
+                        confidences.append(float(confidence))
+
+            idxs = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
+            if len(idxs) > 0:
+                for i in idxs.flatten():
+                    x, y, w, h = boxes[i]
+                    cv2.rectangle(frame, (x, y), (x + w, y + h),
+                                  (0, 0, 255), 2)
+                    cv2.putText(frame, f"Person {confidences[i]*100:.1f}%",
+                                (x, y - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                                (0, 0, 255), 2)
+            #Convert to Tk Image
             img = ImageTk.PhotoImage(
                     Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             )
