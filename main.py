@@ -50,7 +50,7 @@ class camera_state:
         self.source = source 
         self.cap = safe_open_cam(source)
         if self.cap is None:
-            print("unable to open {name} in camera_state __init__()")
+            print(f"unable to open {name} in camera_state __init__()")
             #Something not working then, initialize framesize to default anyways
             self.framesize = (640, 480)
             self.codec = cv2.VideoWriter_fourcc(*'MJPG')
@@ -59,26 +59,23 @@ class camera_state:
             self.codec = int(self.cap.get(cv2.CAP_PROP_FOURCC))
         
 
-        self.writer = cv2.VideoWriter()
+        self.writer = None
         self.name = name
         
         self.state = 1
-        #self.last_pic_time = time.time()
+        self.last_pic_time =  0         #Should initialize to time.time()?
         self.last_affirmed_2 = time.time()
         self.last_affirmed_3 = time.time()
         self.last_affirmed_4 = time.time()
-    #state is basically an emun
-    #1: no person in frame
-    #2: person in frame is farther than 50m
-    #3: person in frame is inbetween 10m and 50m from cammera
-    #4: person in frame is closer than 10m 
-        
         self.last_saved_frame_time = 0 #the last absolute time a frame from this camera was saved
         self.save_frame_period_s = 3 #the period in seconds to save frames/photos from this camera
 
     #logic for state changes, It is not neccessarily if distance setpoint hit chage state
     #See state trasnition table
-    #Will update the VideoWriter (self.writer) to reflect the new framereate if needed
+    #1: no person in frame
+    #2: person in frame is farther than 50m
+    #3: person in frame is inbetween 10m and 50m from cammera
+    #4: person in frame is closer than 10m 
     def update_state(self, distance):
         path = "recordings"
         timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
@@ -97,7 +94,8 @@ class camera_state:
                 self.last_affirmed_3 = time.time()
                 os.makedirs(os.path.join(path, self.name), exist_ok = True)
                 videoName = os.path.join(path, self.name, f"{timestamp}_lowfps.avi")
-                self.writer.open(videoName, self.codec, 5, self.framesize, True)
+                self.writer = cv2.VideoWriter(videoName, self.codec, 5, self.framesze, True)
+                #self.writer.open(videoName, self.codec, 5, self.framesize, True)
                 self.save_frame_period_s = 0.2 #1/5
                 write_log_entry(f"{self.name}: State changed from 2 to 3, person detected at {distance:.2f}m, video started: {videoName}")
             elif distance < 0 and self.last_affirmed_2 < time.time() - 5:        #transition to state 1
@@ -111,17 +109,20 @@ class camera_state:
                 self.last_affirmed_4 = time.time()
                 os.makedirs(os.path.join(path, self.name), exist_ok = True)
                 videoName = os.path.join(path, self.name, f"{timestamp}_highfps.avi")
-                self.writer.open(videoName, self.codec, 15, self.framesize, True)
+                self.writer = cv2.VideoWriter(videoName, self.codec, 5, self.framesze, True)
+                #self.writer.open(videoName, self.codec, 15, self.framesize, True)
                 self.save_frame_period_s = 0.0666666666667 #1/15 fps
                 write_log_entry(f"{self.name}: State changed from 3 to 4, person detected at {distance:.2f}m, video started: {videoName}")
             elif distance < 0 and self.last_affirmed_3 < time.time() - 5:        #transition to state 1
                 self.state = 1
-                self.writer.release()
+                if self.writer is not None:
+                    self.writer.release()
                 write_log_entry(f"{self.name}: State fallback (3 to 1), no person detected, video writer released")
             elif distance >= 50 and self.last_affirmed_3 < time.time() - 2:      #transition to state 2
                 self.state = 2
                 self.last_affirmed_2 = time.time()
-                self.writer.release()
+                if self.writer is not None:
+                    self.writer.release()
                 self.save_frame_period_s = 3
                 write_log_entry(f"{self.name}: State fallback (3 to 2), no person detected, video writer released")
         elif self.state == 4:                                                  #state 4
@@ -129,14 +130,16 @@ class camera_state:
                 self.last_affirmed_4 = time.time()
             elif distance < 0 and self.last_affirmed_4 < time.time() - 5:         #transition to state 1
                 self.state = 1
-                self.writer.release()
+                if self.writer is not None:
+                    self.writer.release()
                 write_log_entry(f"{self.name}: State fallback (4 to 1), no person detected, video writer released")
             elif distance >= 10 and self.last_affirmed_4 < time.time() - 2:       #transition to state 3
                 self.state = 3
                 self.last_affirmed_3 = time.time()
                 os.makedirs(os.path.join(path, self.name), exist_ok = True)
                 videoName = os.path.join(path, self.name, f"{timestamp}_lowfps.avi")
-                self.writer.open(videoName, self.codec, 5, self.framesize, True)
+                self.writer = cv2.VideoWriter(videoName, self.codec, 5, self.framesze, True)
+                #self.writer.open(videoName, self.codec, 5, self.framesize, True)
                 self.save_frame_period_s = 0.2 #1/5
                 write_log_entry(f"{self.name}: State fallback (4 to 3), no person detected, video started: {videoName}")
 
@@ -198,8 +201,10 @@ def poll_distance(frame, net):
     #ret, frame = cap.read()
     #cap.release()       #poll distance was missing this cap release!
 
-    #if not ret or frame is None:
-    #    return -3
+    if frame is None or not hasattr(frame, 'shape'):
+        return -1
+    if net is None:
+        return -1
 
     height, width = frame.shape[:2]
 
@@ -399,11 +404,7 @@ def main():
     net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
 
     main_to_poll_q = queue.Queue()
-    poll_to_main_q = queue.Queue()
-
-    
-
-    #camera_0.avi & ect. are placeholders, they should really by be like /dev/video0
+    poll_to_main_q = queue.Queue() 
     cameras = [
         camera_state(0, "camera0"),
         camera_state(2, "camera1"),
@@ -414,7 +415,6 @@ def main():
     current_polling_camera = 0
 
     ## Program Structure: in main thread while: Check queue for new data. If it is detected: resart polling thread by
-
     #Business logic
 
     threading.Thread(target=Run_Polling_Thread, args=(main_to_poll_q, poll_to_main_q), daemon=True).start()
@@ -423,37 +423,45 @@ def main():
 
     #seed polling logic to start the queue information exchange
     ret, frame = cameras[current_polling_camera].cap.read()
-    if ret == False:
+    if not ret or frame is None:
         print("There was an error on initial image capture, program not running")
-    main_to_poll_q.put(frame, block=False)
-
+        return
+    main_to_poll_q.put(frame)   #removed block=False condition
+    
     while True:
-        #possibly get a value from the polling function
-        new_distance = True
-        distance = -1
         try:
-            distance = poll_to_main_q.get(block=False) #check if there is anything in the incoming queue
+            distance = poll_to_main_q.get(block=False)
+            new_distance = True
         except queue.Empty:
             new_distance = False
-
 
         if new_distance:
             #update state with new distance
             cameras[current_polling_camera].update_state(distance)
             
             #time to set polling working on another frame
-            current_polling_camera += 1
-            if current_polling_camera == 4: #wrap around
-                current_polling_camera = 0
-              
+            current_polling_camera = (current_polling_camera + 1) % 4
+            camera = cameras[current_polling_camera]
+
             ret, frame = cameras[current_polling_camera].cap.read()
-            if ret == False:
-                print("issue taking frame in for next poll")
+            if not ret or frame is None:
+                print(f"Issue taking frame from {camera.name}")
+                #Added this, try reopening camera if it fails:
+                camera.cap.release()
+                camera.cap = safe_open_cam(camera.source)
+                if camera.cap:
+                    ret2, frame2 = camera.cap.read()
+                    if ret2 and frame2 is not None:
+                        main_to_poll_q.put(frame2)
+                    else:
+                        print(f"Still failing to take frame from {camera.name}")
+                        main_to_poll_q.put(None)   #Put something to progress loop
+                else:
+                    print(f"Failed to reopen {camera.name}")
+                    main_to_poll_q.put(None)
             else:
-                print("frame taken")
-            #if ret == False:
-               # print("Error in reading {cameras[current_polling_camera].name}")
-            main_to_poll_q.put(frame, block=False)
+                print("Frame taken")
+                main_to_poll_q.put(frame)  #Only put frame if no error
             
         #write to video/photo outputs if the time is right
         for camera in cameras:
@@ -463,14 +471,19 @@ def main():
                 
                 #Write the frame/photo
                 ret, frame = camera.cap.read()
+                if not ret or frame is None:
+                    continue
+
                 if camera.state == 2: #picture mode
                     timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
                     img_name = os.path.join(path, self.name, f"{timestamp}_highfps.avi")
+                    os.makedirs(save_path, exist_ok=True)
                     safe_write_png(img_name, frame)
                 else: #video mode
-                    camera.writer.write(frame)
+                    if camera.writer is not None:
+                        camera.wrier.write(frame)
     
-        
+        time.sleep(0.01)    #debugging timer
         
         #if pause_polling:
         #    time.sleep(0.2)
