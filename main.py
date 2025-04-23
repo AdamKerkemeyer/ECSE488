@@ -1,5 +1,5 @@
 # Main Function for the Watchfull Webcams project
-# 4/8/2025
+# 4/22/2025
 # Evan Grover & Adam Kerkermeyer
 
 import cv2
@@ -57,7 +57,7 @@ class camera_state:
         else:
             self.framesize = (int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
             self.codec = int(self.cap.get(cv2.CAP_PROP_FOURCC))
-            self.cap.release()
+        
 
         self.writer = cv2.VideoWriter()
         self.name = name
@@ -97,7 +97,6 @@ class camera_state:
                 self.last_affirmed_3 = time.time()
                 os.makedirs(os.path.join(path, self.name), exist_ok = True)
                 videoName = os.path.join(path, self.name, f"{timestamp}_lowfps.avi")
-                #videoName = path+ "/" + self.name + "/" + time.asctime(time.localtime()) + " low fps"
                 self.writer.open(videoName, self.codec, 5, self.framesize, True)
                 self.save_frame_period_s = 0.2 #1/5
                 write_log_entry(f"{self.name}: State changed from 2 to 3, person detected at {distance:.2f}m, video started: {videoName}")
@@ -112,9 +111,8 @@ class camera_state:
                 self.last_affirmed_4 = time.time()
                 os.makedirs(os.path.join(path, self.name), exist_ok = True)
                 videoName = os.path.join(path, self.name, f"{timestamp}_highfps.avi")
-                #videoName = path + "/" + self.name + "/" + time.asctime(time.localtime()) + " high fps"
                 self.writer.open(videoName, self.codec, 15, self.framesize, True)
-                self.save_frame_period_s = 0.0666666666667 #1/15
+                self.save_frame_period_s = 0.0666666666667 #1/15 fps
                 write_log_entry(f"{self.name}: State changed from 3 to 4, person detected at {distance:.2f}m, video started: {videoName}")
             elif distance < 0 and self.last_affirmed_3 < time.time() - 5:        #transition to state 1
                 self.state = 1
@@ -138,19 +136,10 @@ class camera_state:
                 self.last_affirmed_3 = time.time()
                 os.makedirs(os.path.join(path, self.name), exist_ok = True)
                 videoName = os.path.join(path, self.name, f"{timestamp}_lowfps.avi")
-                #videoName = path + "/" + self.name + "/" + time.asctime(time.localtime()) + " low fps"
                 self.writer.open(videoName, self.codec, 5, self.framesize, True)
                 self.save_frame_period_s = 0.2 #1/5
                 write_log_entry(f"{self.name}: State fallback (4 to 3), no person detected, video started: {videoName}")
-"""
-    state = 1
-    #last_pic_time is the time the last picuture was take so I can take a picture every 3 seconds
-    last_pic_time = time.time()
-    #last seen times for each state
-    last_affirmed_2 = time.time()
-    last_affirmed_3 = time.time()
-    last_affirmed_4 = time.time()
-"""
+
 #Will write to the file system with the correct data rate
 def save_footage(camera, path):
     cap = safe_open_cam(camera.source)
@@ -260,33 +249,6 @@ def poll_distance(frame, net):
         return -1
 
 #GUI Code:
-'''
-def show_live(source):
-    global pause_polling, net
-    pause_polling = True
-
-    cap = safe_open_cam(source)
-    if cap is None:
-        print("ERROR, show live camera button failed to open camera {source}")
-        return
-    
-    #Define parameters (Not necessary, can remove all of these)
-    #cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    #cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    #cap.set(cv2.CAP_PROP_FPS, 10)
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        cv2.imshow(f"Camera {source}", frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
-    pause_polling = False
-'''
 def open_gui(cameras):
     gui = tk.Tk()
     gui.title("Watchful Webcams Panel")
@@ -444,9 +406,9 @@ def main():
     #camera_0.avi & ect. are placeholders, they should really by be like /dev/video0
     cameras = [
         camera_state(0, "camera0"),
-       # camera_state(2, "camera1"),
-        #camera_state(4, "camera2"),
-       # camera_state(6, "camera3")
+        camera_state(2, "camera1"),
+        camera_state(4, "camera2"),
+        camera_state(6, "camera3")
     ]
     start_time = time.time()
     current_polling_camera = 0
@@ -457,16 +419,22 @@ def main():
 
     threading.Thread(target=Run_Polling_Thread, args=(main_to_poll_q, poll_to_main_q), daemon=True).start()
         
-    #open_gui(cameras)          #open GUI in the main thread.
+    #open_gui(cameras)          #open GUI in the main thread
+
+    #seed polling logic to start the queue information exchange
+    ret, frame = cameras[current_polling_camera].cap.read()
+    if ret == False:
+        print("There was an error on initial image capture, program not running")
+    main_to_poll_q.put(frame, block=False)
 
     while True:
         #possibly get a value from the polling function
-        new_distance = False
+        new_distance = True
         distance = -1
         try:
             distance = poll_to_main_q.get(block=False) #check if there is anything in the incoming queue
         except queue.Empty:
-            new_distance = True
+            new_distance = False
 
 
         if new_distance:
@@ -477,11 +445,12 @@ def main():
             current_polling_camera += 1
             if current_polling_camera == 4: #wrap around
                 current_polling_camera = 0
-            ret = False
-            while ret == False:
-                ret, frame = cameras[current_polling_camera].cap.read()
-                print("TRY TRY TRY")
-            print("frame taken")
+              
+            ret, frame = cameras[current_polling_camera].cap.read()
+            if ret == False:
+                print("issue taking frame in for next poll")
+            else:
+                print("frame taken")
             #if ret == False:
                # print("Error in reading {cameras[current_polling_camera].name}")
             main_to_poll_q.put(frame, block=False)
