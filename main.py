@@ -48,7 +48,7 @@ def safe_write_png(path, frame):
 class camera_state:
     def __init__(self, source, name):
         self.source = source 
-        self.cap = VideoCapture(source)
+        self.cap = safe_open_cam(source)
         if self.cap is None:
             print("unable to open {name} in camera_state __init__()")
             #Something not working then, initialize framesize to default anyways
@@ -444,9 +444,9 @@ def main():
     #camera_0.avi & ect. are placeholders, they should really by be like /dev/video0
     cameras = [
         camera_state(0, "camera0"),
-        camera_state(2, "camera1"),
-        camera_state(4, "camera2"),
-        camera_state(6, "camera3")
+       # camera_state(2, "camera1"),
+        #camera_state(4, "camera2"),
+       # camera_state(6, "camera3")
     ]
     start_time = time.time()
     current_polling_camera = 0
@@ -457,11 +457,12 @@ def main():
 
     threading.Thread(target=Run_Polling_Thread, args=(main_to_poll_q, poll_to_main_q), daemon=True).start()
         
-    open_gui(cameras)          #open GUI in the main thread.
+    #open_gui(cameras)          #open GUI in the main thread.
 
     while True:
         #possibly get a value from the polling function
         new_distance = False
+        distance = -1
         try:
             distance = poll_to_main_q.get(block=False) #check if there is anything in the incoming queue
         except queue.Empty:
@@ -470,13 +471,19 @@ def main():
 
         if new_distance:
             #update state with new distance
-            camera[current_polling_camera].update_state(distance)
-
+            cameras[current_polling_camera].update_state(distance)
+            
             #time to set polling working on another frame
             current_polling_camera += 1
             if current_polling_camera == 4: #wrap around
                 current_polling_camera = 0
-            ret, frame = cameras[current_polling_camera].cap.read()
+            ret = False
+            while ret == False:
+                ret, frame = cameras[current_polling_camera].cap.read()
+                print("TRY TRY TRY")
+            print("frame taken")
+            #if ret == False:
+               # print("Error in reading {cameras[current_polling_camera].name}")
             main_to_poll_q.put(frame, block=False)
             
         #write to video/photo outputs if the time is right
