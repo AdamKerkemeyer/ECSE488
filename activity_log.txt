@@ -44,3 +44,41 @@
 [2025-04-24 15:52:30] camera2: State changed from 2 to 3, person detected at -1.00m, video started 
 [2025-04-24 15:52:37] camera2: State changed from 3 to 4, person detected at -1.00m, video started 
 [2025-04-24 15:52:44] camera2: State fallback (4 to 1), no person detected, video writer released 
+[2025-04-24 15:59:50] camera2: State changed from 1 to 2, person detected at 35.84m 
+[2025-04-24 15:59:57] camera2: State changed from 2 to 3, person detected at 32.34m, video started 
+[2025-04-24 16:00:25] camera2: State changed from 3 to 4, person detected at -1.00m, video started 
+[2025-04-24 16:00:32] camera2: State fallback (4 to 1), no person detected, video writer released 
+[2025-04-24 16:00:40] camera2: State changed from 1 to 2, person detected at 37.47m 
+[2025-04-24 16:00:47] camera2: State changed from 2 to 3, person detected at -1.00m, video started 
+[2025-04-24 16:14:20] camera2: State changed from 1 to 2, person detected at 38.25m 
+[2025-04-24 16:17:13] camera1: State changed from 1 to 2, person detected at 27.91m 
+[2025-04-24 16:17:15] camera2: State changed from 1 to 2, person detected at 27.78m 
+[2025-04-24 16:17:17] camera3: State changed from 1 to 2, person detected at 30.62m 
+[2025-04-24 16:17:19] camera0: State changed from 1 to 2, person detected at 28.62m 
+[2025-04-24 16:17:20] camera1: State changed from 2 to 3, person detected at 27.97m, video started 
+[2025-04-24 16:17:22] camera2: State changed from 2 to 3, person detected at 28.41m, video started 
+[2025-04-24 16:17:25] camera3: State changed from 2 to 3, person detected at -1.00m, video started 
+[2025-04-24 16:17:27] camera0: State changed from 2 to 3, person detected at -1.00m, video started 
+[2025-04-24 16:17:28] camera1: State changed from 3 to 4, person detected at -1.00m, video started 
+[2025-04-24 16:17:30] camera2: State changed from 3 to 4, person detected at -1.00m, video started 
+[2025-04-24 16:17:32] camera3: State changed from 3 to 4, person detected at -1.00m, video started 
+[2025-04-24 16:17:34] camera0: State changed from 3 to 4, person detected at -1.00m, video started 
+[2025-04-24 16:19:55] camera2: State changed from 1 to 2, person detected at 29.88m 
+[2025-04-24 16:20:03] camera2: State changed from 2 to 3, person detected at 31.97m, video started 
+[2025-04-24 16:21:07] camera0: State changed from 1 to 2, person detected at 34.25m 
+[2025-04-24 16:21:14] camera0: State changed from 2 to 3, person detected at 27.81m, video started 
+[2025-04-24 16:21:16] camera1: State changed from 1 to 2, person detected at 28.97m 
+[2025-04-24 16:21:22] camera0: State changed from 3 to 4, person detected at -1.00m, video started 
+[2025-04-24 16:21:24] camera1: State changed from 2 to 3, person detected at 30.97m, video started 
+[2025-04-24 16:21:29] camera0: State fallback (4 to 3), no person detected, video started 
+[2025-04-24 16:21:31] camera1: State changed from 3 to 4, person detected at -1.00m, video started 
+[2025-04-24 16:21:38] camera1: State fallback (4 to 3), no person detected, video started 
+[2025-04-24 16:21:48] camera2: State changed from 3 to 4, person detected at -1.00m, video started 
+[2025-04-24 16:21:55] camera2: State fallback (4 to 3), no person detected, video started 
+[2025-04-24 16:22:13] camera0: State changed from 3 to 4, person detected at -1.00m, video started 
+[2025-04-24 16:22:17] camera2: State changed from 3 to 4, person detected at -1.00m, video started 
+[2025-04-24 16:22:19] camera3: State changed from 1 to 2, person detected at 34.72m 
+[2025-04-24 16:22:20] camera0: State fallback (4 to 1), no person detected, video writer released 
+[2025-04-24 16:22:24] camera2: State fallback (4 to 3), no person detected, video started 
+[2025-04-24 16:22:26] camera3: State changed from 2 to 3, person detected at -1.00m, video started 
+[2025-04-24 16:22:27] camera0: State changed from 1 to 2, person detected at 28.16m 

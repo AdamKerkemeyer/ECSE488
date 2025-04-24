@@ -27,7 +27,7 @@ while True:
     # Capture frame-by-frame
     if next_record_time <= time.time():
         print("caputureing frame")
-        next_record_time += 0.1
+        next_record_time += 0.5
         ret, frame = cap.read()
 
     # If frame is read correctly, ret is True

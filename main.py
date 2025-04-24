@@ -486,74 +486,13 @@ def main():
             current_saving_camera = highest_state_cam.number
             main_to_save_q.put(save_cmd, block=False)
            
-           # if not ret or frame is None:
-           #     print(f"Issue taking frame from {camera.name}")
-           #     #Added this, try reopening camera if it fails:
-           #     camera.cap.release()
-           #     camera.cap = safe_open_cam(camera.source)
-           #     if camera.cap:
-           #         ret2, frame2 = camera.cap.read()
-           #         if ret2 and frame2 is not None:
-           #             main_to_poll_q.put(frame2)
-           #         else:
-           #             print(f"Still failing to take frame from {camera.name}")
-           #             main_to_poll_q.put(None)   #Put something to progress loop
-           #     else:
-           #         print(f"Failed to reopen {camera.name}")
-           #         main_to_poll_q.put(None)
-           # else:
-           #     print(f"Frame taken by {camera.name}")
-           #     main_to_poll_q.put(frame)  #Only put frame if no error
-            
-        #write to video/photo outputs if the time is right
-       # for camera in cameras:
-         #   if camera.state == 1:
-       #         continue
-    
-       #     # guard against a None reader
-       #     if camera.cap is None or not camera.cap.isOpened():
-       #         continue
-#
-       #     now = time.time()
-       #     if camera.last_saved_frame_time + camera.save_frame_period_s > now:
-       #         continue
-       #     camera.last_saved_frame_time = now
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
 
-            #ret, frame = camera.cap.read()
-        #    if not ret or frame is None:
-        #        continue
-#
-#            save_path = os.path.join(storage_path, camera.name)
-#            os.makedirs(save_path, exist_ok=True)
-#            timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+     #ending cleanup
+    main_to_save_1.put({"fps": 0, "cam": 0, "frame_request": False})
 
-#            if camera.state == 2:
-#                # still-image mode
-        #        img_name = os.path.join(save_path, f"{timestamp}.png")
-        #        safe_write_png(img_name, frame)
-        #    else:
-                # video mode
-        #        if camera.writer is not None and camera.writer.isOpened():
-        #            camera.writer.write(frame)
-    
-       # time.sleep(0.01)    #debugging timer
-        
-        #if pause_polling:
-        #    time.sleep(0.2)
-        #    continue
-        #for camera in cameras:
-        #    d = poll_distance(camera, net)
-        #    camera.update_state(d)
-        #    save_footage(camera, storage_path)
 
-                #end the program after 3 seconds
-                #  if time.time() > start_time + 3:
-                #     program_terminate = True  
-        #time.sleep(0.01) #throttle CPU
-
-    #threading.Thread(target=business_logic, daemon=True).start()
-
-    #
 
 def Run_Polling_Thread(main_to_poll_q, poll_to_main_q):
     while True:
@@ -578,12 +517,13 @@ def Run_Saving_Thread(main_to_save_q, save_to_main_q , path, codec, framesize):
         #setup logic
         if command != new_command and new_command["frame_request"] == False:
             if writer != None: #destory 
+                print("ending recording of camera" + str(command["cam"]))
                 writer.release()
                 writer = None
 
             if command["cam"] != new_command["cam"]:
                 cap.release()
-                print("saving cammera with source = " + str(new_command["cam"] *2))
+                print("saving cammera" + str(new_command["cam"]))
                 cap = safe_open_cam(new_command["cam"] * 2)
             
             if command["fps"] != new_command["fps"]:
@@ -592,21 +532,21 @@ def Run_Saving_Thread(main_to_save_q, save_to_main_q , path, codec, framesize):
                 else:
                     save_period = 0
 
-                if save_period > 0 and  save_period < 1:   
-                    fps = new_command["fps"]
-                    timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
-                    videoName = os.path.join(path,"camera" +str( new_command["cam"]) , f"{timestamp}_{fps}fps.avi")
-                    print(videoName)
-                    print(codec)
-                    print(framesize)
-                    writer = cv2.VideoWriter(videoName, codec, new_command["fps"], framesize, True)
+            if save_period > 0 and  save_period < 1:   
+                fps = new_command["fps"]
+                timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+                videoName = os.path.join(path,"camera" +str( new_command["cam"]) , f"{timestamp}_{fps}fps.avi")
+                writer = cv2.VideoWriter(videoName, codec, new_command["fps"], framesize, True)
             command = new_command
+            main_to_save_q.task_done()
+
         #frame request
         elif new_command["frame_request"] == True: #main thread requested a frame
             ret, frame = cap.read()
             if not ret:
                 print("evan_Error: failed to caputre frame during frame request")
             save_to_main_q.put(frame, block=False)
+            main_to_save_q.task_done()
             
         #recording logic
         if command["fps"] != 0 and time.time() >= last_write_time + save_period:
