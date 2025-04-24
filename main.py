@@ -55,12 +55,13 @@ class camera_state:
             print(f"unable to open {name} in camera_state __init__()")
             #Something not working then, initialize framesize to default anyways
             self.framesize = (640, 480)
-            self.codec = cv2.VideoWriter_fourcc(*'MJPG')
+           # self.codec = cv2.VideoWriter_fourcc(*'MJPG')
         else:
             self.framesize = (int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-            self.codec = int(self.cap.get(cv2.CAP_PROP_FOURCC))
+           # self.codec = int(self.cap.get(cv2.CAP_PROP_FOURCC))
             self.cap.release() #camera state cameras should be by default uninitialized
 
+        self.codec = cv2.VideoWriter_fourcc(*'XVID')
         print(self.framesize)
         print(self.codec)
         #self.writer = None
