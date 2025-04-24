@@ -61,6 +61,8 @@ class camera_state:
             self.codec = int(self.cap.get(cv2.CAP_PROP_FOURCC))
             self.cap.release() #camera state cameras should be by default uninitialized
 
+        print(self.framesize)
+        print(self.codec)
         #self.writer = None
         self.name = "camera" + str(number)
         self.fps = 0 
@@ -94,7 +96,7 @@ class camera_state:
                 self.state = 3
                 self.last_affirmed_3 = time.time()
                 os.makedirs(os.path.join(path, self.name), exist_ok = True)
-                write_log_entry(f"{self.name}: State changed from 2 to 3, person detected at {distance:.2f}m, video started: {videoName}")
+                write_log_entry(f"{self.name}: State changed from 2 to 3, person detected at {distance:.2f}m, video started")
             elif distance < 0 and self.last_affirmed_2 < time.time() - 5:        #transition to state 1
                 self.state = 1
                 write_log_entry(f"{self.name}: State fallback (2 to 1), no person detected")
@@ -105,7 +107,7 @@ class camera_state:
                 self.state = 4
                 self.last_affirmed_4 = time.time()
                 os.makedirs(os.path.join(path, self.name), exist_ok = True)
-                write_log_entry(f"{self.name}: State changed from 3 to 4, person detected at {distance:.2f}m, video started: {videoName}")
+                write_log_entry(f"{self.name}: State changed from 3 to 4, person detected at {distance:.2f}m, video started")
             elif distance < 0 and self.last_affirmed_3 < time.time() - 5:        #transition to state 1
                 self.state = 1
                 write_log_entry(f"{self.name}: State fallback (3 to 1), no person detected, video writer released")
@@ -123,7 +125,7 @@ class camera_state:
                 self.state = 3
                 self.last_affirmed_3 = time.time()
                 os.makedirs(os.path.join(path, self.name), exist_ok = True)
-                write_log_entry(f"{self.name}: State fallback (4 to 3), no person detected, video started: {videoName}")
+                write_log_entry(f"{self.name}: State fallback (4 to 3), no person detected, video started")
         
         #update tied to state variables
         if self.state == 1:
@@ -452,6 +454,8 @@ def main():
 
         if new_distance:
             #update state with new distance
+           # if current_polling_camera == 3:
+            #    distance = 2 #TEST TEST TEST ETSTES TESTETSTETE
             cameras[current_polling_camera].update_state(distance)
             
             #time to set polling working on another frame
@@ -481,6 +485,7 @@ def main():
             save_cmd = {"fps": highest_state_cam.fps, "cam": highest_state_cam.number, "frame_request": False}
             current_saving_camera = highest_state_cam.number
             main_to_save_q.put(save_cmd, block=False)
+           
            # if not ret or frame is None:
            #     print(f"Issue taking frame from {camera.name}")
            #     #Added this, try reopening camera if it fails:
@@ -590,7 +595,10 @@ def Run_Saving_Thread(main_to_save_q, save_to_main_q , path, codec, framesize):
                 if save_period > 0 and  save_period < 1:   
                     fps = new_command["fps"]
                     timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
-                    videoName = os.path.join(path,"camera" + new_command["cam"] , f"{timestamp}_{fps}fps.avi")
+                    videoName = os.path.join(path,"camera" +str( new_command["cam"]) , f"{timestamp}_{fps}fps.avi")
+                    print(videoName)
+                    print(codec)
+                    print(framesize)
                     writer = cv2.VideoWriter(videoName, codec, new_command["fps"], framesize, True)
             command = new_command
         #frame request
@@ -602,25 +610,28 @@ def Run_Saving_Thread(main_to_save_q, save_to_main_q , path, codec, framesize):
             
         #recording logic
         if command["fps"] != 0 and time.time() >= last_write_time + save_period:
+           # print("time for writing!!!")
             #update the write time to prevent leaving it behind on cam switches while maintaining absolute timingi
             if time.time() - save_period * 2 > last_write_time:
                 last_write_time = time.time() #catchup
             else:
-                last_write_time += save_period #absolute increment, not scewed by time.time() lag
+                last_write_time += save_period #absolute increment, not skewed by time.time() lag
             
             ret, frame = cap.read()
-
             if not ret:
                 print("evan_Error: failed to caputre frame")
+            
             
             #save the frame
             if save_period < 1: #video mode
                 if writer == None:
                     print("evan_Error: Trying to record vidoe with no writer")
+               # print("saving video frame")
                 writer.write(frame)
             else: #image mode
-                img_name = os.path.join(path, "camera" + command["cam"],  f"{timestamp}.png")
-                safe_write_png(img_name, frame)
+                img_path = os.path.join(path, "camera" + str(command["cam"]))
+               # print("saving image")
+                safe_write_png(img_path, frame)
 
 
 #Only run the main fucntion if this file is the one called
