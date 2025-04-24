@@ -202,9 +202,9 @@ def poll_distance(frame, net):
     #cap.release()       #poll distance was missing this cap release!
 
     if frame is None or not hasattr(frame, 'shape'):
-        return -1
+        return -2
     if net is None:
-        return -1
+        return -3
 
     height, width = frame.shape[:2]
 
@@ -460,7 +460,7 @@ def main():
                     print(f"Failed to reopen {camera.name}")
                     main_to_poll_q.put(None)
             else:
-                print("Frame taken")
+                print(f"Frame taken by {camera.name}")
                 main_to_poll_q.put(frame)  #Only put frame if no error
             
         #write to video/photo outputs if the time is right
