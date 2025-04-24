@@ -39,6 +39,8 @@ my-venv
 
 #Ignore recordings folder on local
 /recordings/
+/old_recordings/
+/recordings_old/
 
 #Ignore pycache
 /_pycache_/
