@@ -82,3 +82,8 @@
 [2025-04-24 16:22:24] camera2: State fallback (4 to 3), no person detected, video started 
 [2025-04-24 16:22:26] camera3: State changed from 2 to 3, person detected at -1.00m, video started 
 [2025-04-24 16:22:27] camera0: State changed from 1 to 2, person detected at 28.16m 
+[2025-04-24 16:22:33] camera3: State changed from 3 to 4, person detected at -1.00m, video started 
+[2025-04-24 16:22:35] camera0: State changed from 2 to 3, person detected at 27.97m, video started 
+[2025-04-24 16:22:40] camera3: State fallback (4 to 1), no person detected, video writer released 
+[2025-04-24 16:22:49] camera0: State changed from 3 to 4, person detected at -1.00m, video started 
+[2025-04-24 16:22:55] camera3: State changed from 1 to 2, person detected at 30.97m 
