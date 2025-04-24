@@ -3,3 +3,15 @@
 [2025-04-22 17:56:55] camera3: State changed from 1 to 2, person detected at 40.69m 
 [2025-04-22 18:01:09] camera1: State changed from 1 to 2, person detected at 30.28m 
 [2025-04-22 18:01:14] camera3: State changed from 1 to 2, person detected at 38.66m 
+[2025-04-24 11:42:18] camera2: State changed from 1 to 2, person detected at 31.38m 
+[2025-04-24 11:43:23] camera2: State changed from 1 to 2, person detected at 38.47m 
+[2025-04-24 11:43:25] camera2: State changed from 2 to 3, person detected at -1.00m, video started: recordings/camera2/2025-04-24_11-43-25_lowfps.avi 
+[2025-04-24 11:43:26] camera2: State changed from 3 to 4, person detected at -1.00m, video started: recordings/camera2/2025-04-24_11-43-26_highfps.avi 
+[2025-04-24 11:57:19] camera2: State changed from 1 to 2, person detected at 30.22m 
+[2025-04-24 11:57:20] camera2: State changed from 2 to 3, person detected at 30.47m, video started: recordings/camera2/2025-04-24_11-57-20_lowfps.avi 
+[2025-04-24 11:57:22] camera2: State changed from 3 to 4, person detected at -1.00m, video started: recordings/camera2/2025-04-24_11-57-22_highfps.avi 
+[2025-04-24 11:57:28] camera2: State fallback (4 to 1), no person detected, video writer released 
+[2025-04-24 11:57:40] camera2: State changed from 1 to 2, person detected at 29.03m 
+[2025-04-24 11:57:41] camera2: State changed from 2 to 3, person detected at -1.00m, video started: recordings/camera2/2025-04-24_11-57-41_lowfps.avi 
+[2025-04-24 11:57:42] camera2: State changed from 3 to 4, person detected at -1.00m, video started: recordings/camera2/2025-04-24_11-57-42_highfps.avi 
+[2025-04-24 11:57:49] camera2: State fallback (4 to 1), no person detected, video writer released 

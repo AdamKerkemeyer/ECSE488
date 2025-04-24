@@ -16,6 +16,7 @@ import threading
 import queue
 import contextlib
 import sys                          #Not sure this is necessary
+import glob
 
 pause_polling = False       #global flag to control if we are checking all cameras. Operates on human interrupt.
 net = None
@@ -24,7 +25,7 @@ net = None
 def safe_open_cam(source, width = 640, height = 480, fps = 10):
     # temporarily silence all stderr output, this prevents warnings that the camera is in use popping up when you  try to access the camera with the GUI but the camera is currently being polled
     with open(os.devnull, 'w') as devnull, contextlib.redirect_stderr(devnull):
-        cap = cv2.VideoCapture(source, cv2.CAP_V4L2)  #Dropped specific V4L2 specification to let openCV autoselect
+        cap = cv2.VideoCapture(source, cv2.CAP_V4L2)  #specify cv2.CAP_V4L2 
 
     if not cap.isOpened():
         print(f"Error, could not open video source: {source}")
@@ -94,7 +95,7 @@ class camera_state:
                 self.last_affirmed_3 = time.time()
                 os.makedirs(os.path.join(path, self.name), exist_ok = True)
                 videoName = os.path.join(path, self.name, f"{timestamp}_lowfps.avi")
-                self.writer = cv2.VideoWriter(videoName, self.codec, 5, self.framesze, True)
+                self.writer = cv2.VideoWriter(videoName, self.codec, 5, self.framesize, True)
                 #self.writer.open(videoName, self.codec, 5, self.framesize, True)
                 self.save_frame_period_s = 0.2 #1/5
                 write_log_entry(f"{self.name}: State changed from 2 to 3, person detected at {distance:.2f}m, video started: {videoName}")
@@ -109,7 +110,7 @@ class camera_state:
                 self.last_affirmed_4 = time.time()
                 os.makedirs(os.path.join(path, self.name), exist_ok = True)
                 videoName = os.path.join(path, self.name, f"{timestamp}_highfps.avi")
-                self.writer = cv2.VideoWriter(videoName, self.codec, 5, self.framesze, True)
+                self.writer = cv2.VideoWriter(videoName, self.codec, 5, self.framesize, True)
                 #self.writer.open(videoName, self.codec, 15, self.framesize, True)
                 self.save_frame_period_s = 0.0666666666667 #1/15 fps
                 write_log_entry(f"{self.name}: State changed from 3 to 4, person detected at {distance:.2f}m, video started: {videoName}")
@@ -138,7 +139,7 @@ class camera_state:
                 self.last_affirmed_3 = time.time()
                 os.makedirs(os.path.join(path, self.name), exist_ok = True)
                 videoName = os.path.join(path, self.name, f"{timestamp}_lowfps.avi")
-                self.writer = cv2.VideoWriter(videoName, self.codec, 5, self.framesze, True)
+                self.writer = cv2.VideoWriter(videoName, self.codec, 5, self.framesize, True)
                 #self.writer.open(videoName, self.codec, 5, self.framesize, True)
                 self.save_frame_period_s = 0.2 #1/5
                 write_log_entry(f"{self.name}: State fallback (4 to 3), no person detected, video started: {videoName}")
@@ -405,12 +406,49 @@ def main():
 
     main_to_poll_q = queue.Queue()
     poll_to_main_q = queue.Queue() 
+    main_to_save_q = queue.Queue()
+
+    ''' 
     cameras = [
         camera_state(0, "camera0"),
         camera_state(2, "camera1"),
         camera_state(4, "camera2"),
-        camera_state(6, "camera3")
+        camera_state(6, "camera3"),
     ]
+    '''
+    def find_working_video_nodes(max_idx=8, width=640, height=480, fps=10):
+        print("Searching for cameras ...")
+        good = []
+        with open(os.devnull, 'w') as devnull, contextlib.redirect_stderr(devnull):
+            for i in range(max_idx):
+                cap = cv2.VideoCapture(i)       
+                if not cap.isOpened():
+                    cap.release()
+                    continue
+                # force MJPEG mode so the driver negotiates a valid format
+                mjpg = cv2.VideoWriter_fourcc(*'MJPG')
+                cap.set(cv2.CAP_PROP_FOURCC,       mjpg)
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH,  width)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+                cap.set(cv2.CAP_PROP_FPS,          fps)
+
+                time.sleep(0.1) 
+                ret, _ = cap.read()
+                cap.release()
+
+                if ret:
+                    good.append(i)
+
+        return good
+        
+    #usable = find_working_video_nodes()
+    print("Usable video nodes:", usable)
+    #cameras = [ camera_state(idx, f"camera{j}") 
+    #            for j, idx in enumerate(usable) ]
+    cameras = [camera_state(2, "camera1"),
+               camera_state(4, "camera2"),
+               camera_state(6, "camera3")]
+
     start_time = time.time()
     current_polling_camera = 0
 
@@ -421,7 +459,7 @@ def main():
         
     #open_gui(cameras)          #open GUI in the main thread
 
-    #seed polling logic to start the queue information exchange
+    #seed the polling logic to start the queue information exchange
     ret, frame = cameras[current_polling_camera].cap.read()
     if not ret or frame is None:
         print("There was an error on initial image capture, program not running")
@@ -440,7 +478,7 @@ def main():
             cameras[current_polling_camera].update_state(distance)
             
             #time to set polling working on another frame
-            current_polling_camera = (current_polling_camera + 1) % 4
+            current_polling_camera = (current_polling_camera + 1) % 3 #testign w/ 2 here change me change me change me
             camera = cameras[current_polling_camera]
 
             ret, frame = cameras[current_polling_camera].cap.read()
@@ -465,23 +503,34 @@ def main():
             
         #write to video/photo outputs if the time is right
         for camera in cameras:
-            current_time = time.time()
-            if camera.state != 1 and camera.last_saved_frame_time + camera.save_frame_period_s <= current_time: #time to write to storage
-                camera.last_saved_frame_time += camera.save_frame_period_s
-                
-                #Write the frame/photo
-                ret, frame = camera.cap.read()
-                if not ret or frame is None:
-                    continue
+            if camera.state == 1:
+                continue
 
-                if camera.state == 2: #picture mode
-                    timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
-                    img_name = os.path.join(path, self.name, f"{timestamp}_highfps.avi")
-                    os.makedirs(save_path, exist_ok=True)
-                    safe_write_png(img_name, frame)
-                else: #video mode
-                    if camera.writer is not None:
-                        camera.wrier.write(frame)
+            # guard against a None reader
+            if camera.cap is None or not camera.cap.isOpened():
+                continue
+
+            now = time.time()
+            if camera.last_saved_frame_time + camera.save_frame_period_s > now:
+                continue
+            camera.last_saved_frame_time = now
+
+            ret, frame = camera.cap.read()
+            if not ret or frame is None:
+                continue
+
+            save_path = os.path.join(storage_path, camera.name)
+            os.makedirs(save_path, exist_ok=True)
+            timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+
+            if camera.state == 2:
+                # still-image mode
+                img_name = os.path.join(save_path, f"{timestamp}.png")
+                safe_write_png(img_name, frame)
+            else:
+                # video mode
+                if camera.writer is not None and camera.writer.isOpened():
+                    camera.writer.write(frame)
     
         time.sleep(0.01)    #debugging timer
         
@@ -509,6 +558,23 @@ def Run_Polling_Thread(main_to_poll_q, poll_to_main_q):
         poll_to_main_q.put(d, block=False)#send d to main
         main_to_poll_q.task_done() #indicate to the queue that the task is done
 
+def Run_Saving_Thread(main_to_save_1):
+    command = {"fps": 0, "cam", 0}
+    cap = safe_open_cam(0)
+    save_period = 3
+    while True:
+        #dicts passed into this queue should have a reqested fps, camera targeit
+        try:
+            new_command = main_to_save_q.get(block=False)
+        except queue.Empty
+            new_command = command
+
+        if command != new_command:
+            if command["cam"] != new_command["cam"]:
+                cap.release()
+                cap = safe_open_cam(new_command["cam"])
+            
+            
 
 
 #Only run the main fucntion if this file is the one called
