@@ -6,9 +6,6 @@ import cv2
 import os
 import time
 import numpy as np
-#for GUI
-import tkinter as tk
-from tkinter import scrolledtext, Toplevel, Label
 import math
 
 from PIL import Image, ImageTk      #For PNG metadata strop to prevent libpng incorrect sRGB errors.
@@ -55,25 +52,19 @@ class camera_state:
             print(f"unable to open {name} in camera_state __init__()")
             #Something not working then, initialize framesize to default anyways
             self.framesize = (640, 480)
-           # self.codec = cv2.VideoWriter_fourcc(*'MJPG')
         else:
             self.framesize = (int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)))
-           # self.codec = int(self.cap.get(cv2.CAP_PROP_FOURCC))
             self.cap.release() #camera state cameras should be by default uninitialized
 
         self.codec = cv2.VideoWriter_fourcc(*'XVID')
         print(self.framesize)
         print(self.codec)
-        #self.writer = None
         self.name = "camera" + str(number)
         self.fps = 0 
         self.state = 1
-       # self.last_pic_time =  0         #Should initialize to time.time()?
         self.last_affirmed_2 = time.time()
         self.last_affirmed_3 = time.time()
         self.last_affirmed_4 = time.time()
-       # self.last_saved_frame_time = 0 #the last absolute time a frame from this camera was saved
-       # self.save_frame_period_s = 3 #the period in seconds to save frames/photos from this camera
 
     #logic for state changes, It is not neccessarily if distance setpoint hit chage state
     #See state trasnition table
@@ -85,7 +76,7 @@ class camera_state:
         path = "recordings"
         timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
 
-        if self.state == 1:#Adam: did u mean state = 1 here not state == 0? #state 1 
+        if self.state == 1:                                                 #state 1 
             if distance > 0:                                                #transition to 2
                 self.state = 2
                 self.last_affirmed_2 = time.time()
@@ -98,10 +89,10 @@ class camera_state:
                 self.last_affirmed_3 = time.time()
                 os.makedirs(os.path.join(path, self.name), exist_ok = True)
                 write_log_entry(f"{self.name}: State changed from 2 to 3, person detected at {distance:.2f}m, video started")
-            elif distance < 0 and self.last_affirmed_2 < time.time() - 5:        #transition to state 1
+            elif distance < 0 and self.last_affirmed_2 < time.time() - 5:   #transition to state 1
                 self.state = 1
                 write_log_entry(f"{self.name}: State fallback (2 to 1), no person detected")
-        elif self.state == 3:                                                  #state 3
+        elif self.state == 3:                                               #state 3
             if distance < 50 and distance >= 10:                            #no change
                 self.last_affirmed_3 = time.time()
             elif distance < 10:                                             #transition to state 4
@@ -109,20 +100,20 @@ class camera_state:
                 self.last_affirmed_4 = time.time()
                 os.makedirs(os.path.join(path, self.name), exist_ok = True)
                 write_log_entry(f"{self.name}: State changed from 3 to 4, person detected at {distance:.2f}m, video started")
-            elif distance < 0 and self.last_affirmed_3 < time.time() - 5:        #transition to state 1
+            elif distance < 0 and self.last_affirmed_3 < time.time() - 5:    #transition to state 1
                 self.state = 1
                 write_log_entry(f"{self.name}: State fallback (3 to 1), no person detected, video writer released")
-            elif distance >= 50 and self.last_affirmed_3 < time.time() - 2:      #transition to state 2
+            elif distance >= 50 and self.last_affirmed_3 < time.time() - 2:  #transition to state 2
                 self.state = 2
                 self.last_affirmed_2 = time.time()
                 write_log_entry(f"{self.name}: State fallback (3 to 2), no person detected, video writer released")
-        elif self.state == 4:                                                  #state 4
+        elif self.state == 4:                                                #state 4
             if distance < 10 and distance >= 0:                              #no change
                 self.last_affirmed_4 = time.time()
-            elif distance < 0 and self.last_affirmed_4 < time.time() - 5:         #transition to state 1
+            elif distance < 0 and self.last_affirmed_4 < time.time() - 5:    #transition to state 1
                 self.state = 1
                 write_log_entry(f"{self.name}: State fallback (4 to 1), no person detected, video writer released")
-            elif distance >= 10 and self.last_affirmed_4 < time.time() - 2:       #transition to state 3
+            elif distance >= 10 and self.last_affirmed_4 < time.time() - 2:  #transition to state 3
                 self.state = 3
                 self.last_affirmed_3 = time.time()
                 os.makedirs(os.path.join(path, self.name), exist_ok = True)
@@ -168,12 +159,6 @@ def wipe_log():
 # it should be within +-10m @ the 50m distance
 # it should be within +-5m @ the 10m mark
 def poll_distance(frame, net):
-    #cap = safe_open_cam(camera.source)
-    #if cap is None:
-    #    return -2   #Already return -1 if no person detected
-    ##cap = cv2.VideoCapture(camera.source)
-    #ret, frame = cap.read()
-    #cap.release()       #poll distance was missing this cap release!
 
     if frame is None or not hasattr(frame, 'shape'):
         return -2
@@ -218,7 +203,6 @@ def poll_distance(frame, net):
             i = i[0] if isinstance(i, int) else i
             final_results.append(results[i])
         results =  final_results
-    #print(results)
     if len(results) > 0:
         distance = -0.03125*(results[0]['h'] - 700) + 20
         print(distance)
@@ -227,29 +211,6 @@ def poll_distance(frame, net):
         print(-1)
         return -1
 
-#GUI Code:
-def open_gui(cameras):
-    gui = tk.Tk()
-    gui.title("Watchful Webcams Panel")
-
-    log_view = scrolledtext.ScrolledText(gui, width = 80, height = 20)      #Set log box size in GUI
-    log_view.pack(padx = 10, pady = 10)
-    #Log Buttons
-    refresh_btn = tk.Button(gui, text="Refresh Log", command=lambda: load_log(log_view))
-    refresh_btn.pack(pady=5)
-    clear_btn = tk.Button(gui, text="Clear Log", command=lambda: clear_log(log_view))
-    clear_btn.pack(pady=5)
-    #Camera Buttons
-    btn_frame = tk.Frame(gui)
-    btn_frame.pack(pady = 10)
-    for cam in cameras:
-        tk.Button(
-                btn_frame,
-                text=f"{cam.name}",
-                command=lambda c=cam: open_camera_window(c, gui)
-            ).pack(side=tk.LEFT, padx=5)
-    load_log(log_view)
-    gui.mainloop()
 
 def load_log(widget):
     try:
@@ -265,106 +226,6 @@ def clear_log(widget):
     widget.delete(1.0, tk.END)
     widget.insert(tk.END, "LOG CLEARED.\n")
 
-def open_camera_window(camera, parent):
-    global pause_polling
-    if pause_polling:
-        return
-    pause_polling = True
-    top = Toplevel(parent)
-    top.title(f"Live: {camera.name}")
-    waiting_lbl = Label(top, text=f"waiting for camera to become avaliable...")
-    waiting_lbl.pack()
-
-    stop = threading.Event()
-
-    def on_close():
-        stop.set()
-        #Do not try to release a camera that never successfully opened
-        if 'cap' in locals() and cap is not None:
-            cap.release()
-        top.destroy()
-        global pause_polling
-        pause_polling = False
-    top.protocol("WM_DELETE_WINDOW", on_close)
-
-    cap = None
-    while not stop.is_set():        #Try and open the camera (it may be being polled currently)
-        cap = safe_open_cam(camera.source)
-        if cap:
-            break
-        time.sleep(0.1)
-
-    if stop.is_set() or cap is None:    #bail if user closes window
-        return
-    waiting_lbl.destroy()
-    lbl = Label(top)
-    lbl.pack()
-
-    if cap is None:
-        write_log_entry(f"Failed to open camera {camera.source}")
-        on_close()
-        return
-
-    window_start = time.time()
-    warmup_duration = 2.0
-    def update_frame():
-        if stop.is_set():
-            return
-        ret, frame = cap.read()
-        if ret and frame is not None:
-            if time.time() - window_start < warmup_duration:
-                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                img = ImageTk.PhotoImage(Image.fromarray(rgb))
-                lbl.imgtk = img
-                lbl.config(image=img)
-                lbl.after(30, update_frame)
-                return
-
-            height, width = frame.shape[:2]
-            # Create blob and forward pass
-            blob = cv2.dnn.blobFromImage(frame, 1/255.0, (416, 416), swapRB=True, crop=False)
-            net.setInput(blob)
-            outputs = net.forward(net.getUnconnectedOutLayersNames())
-
-            boxes, confidences = [], []
-            for output in outputs:
-                for detection in output:
-                    scores = detection[5:]
-                    class_id = np.argmax(scores)
-                    confidence = float(scores[class_id])
-                    if class_id == 0 and confidence > 0.5:
-                        if not (math.isfinite(detection[2]) and math.isfinite(detection[3])):
-                            continue
-                        w_rel, h_rel = detection[2], detection[3]
-                        if w_rel <= 0 or h_rel <= 0 or w_rel > 1 or h_rel > 1:
-                            continue
-                        cx, cy = detection[0] * width, detection[1] * height
-                        w, h = int(w_rel * width), int(h_rel * height)
-                        x, y = int(cx - w / 2), int(cy - h / 2)
-                        x, y = max(0, x), max(0, y)
-                        w = min(w, width - x)
-                        h = min(h, height - y)
-                        boxes.append([x, y, w, h])
-                        confidences.append(confidence)
-
-            indices = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
-            if len(indices) > 0:
-                idx_list = indices.flatten() if hasattr(indices, 'flatten') else indices
-                first_idx = idx_list[0]
-                x, y, w, h = boxes[first_idx]
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                cv2.putText(frame, f"Person: {confidences[first_idx]:.2f}", (x, y - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-
-
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            img = ImageTk.PhotoImage(Image.fromarray(rgb))
-            lbl.imgtk = img
-            lbl.config(image=img)
-        # schedule next frame
-        lbl.after(30, update_frame)
-
-    update_frame()
 
 def main():
     #setup
@@ -415,10 +276,6 @@ def main():
 
         return good
         
-    #usable = find_working_video_nodes()
-   # print("Usable video nodes:", usable)
-    #cameras = [ camera_state(idx, f"camera{j}") 
-    #            for j, idx in enumerate(usable) ]
     cameras = [camera_state(0, number=0),
                camera_state(2, number=1),
                camera_state(4, number=2),
@@ -434,7 +291,6 @@ def main():
     threading.Thread(target=Run_Polling_Thread, args=(main_to_poll_q, poll_to_main_q), daemon=True).start()
     threading.Thread(target=Run_Saving_Thread, args=(main_to_save_q, save_to_main_q, storage_path, cameras[0].codec, cameras[0].framesize), daemon=True).start()
         
-    #open_gui(cameras)          #open GUI in the main thread
 
     #seed the polling logic to start the queue information exchange
     cameras[current_polling_camera].open_cam()
@@ -455,8 +311,6 @@ def main():
 
         if new_distance:
             #update state with new distance
-           # if current_polling_camera == 3:
-            #    distance = 2 #TEST TEST TEST ETSTES TESTETSTETE
             cameras[current_polling_camera].update_state(distance)
             
             #time to set polling working on another frame
@@ -551,7 +405,6 @@ def Run_Saving_Thread(main_to_save_q, save_to_main_q , path, codec, framesize):
             
         #recording logic
         if command["fps"] != 0 and time.time() >= last_write_time + save_period:
-           # print("time for writing!!!")
             #update the write time to prevent leaving it behind on cam switches while maintaining absolute timingi
             if time.time() - save_period * 2 > last_write_time:
                 last_write_time = time.time() #catchup
@@ -567,11 +420,9 @@ def Run_Saving_Thread(main_to_save_q, save_to_main_q , path, codec, framesize):
             if save_period < 1: #video mode
                 if writer == None:
                     print("evan_Error: Trying to record vidoe with no writer")
-               # print("saving video frame")
                 writer.write(frame)
             else: #image mode
                 img_path = os.path.join(path, "camera" + str(command["cam"]))
-               # print("saving image")
                 safe_write_png(img_path, frame)
 
 
