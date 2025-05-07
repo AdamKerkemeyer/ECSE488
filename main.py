@@ -491,7 +491,7 @@ def main():
             break
 
      #ending cleanup
-    main_to_save_1.put({"fps": 0, "cam": 0, "frame_request": False})
+    main_to_save_q.put({"fps": 0, "cam": 0, "frame_request": False})
 
 
 
