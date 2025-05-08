@@ -1,6 +1,31 @@
-# ECSE488
-## Overview
-4 USB video camera project using OpenCV and YOLOv4-tiny on Pi 5.
+# ECSE488 Watchful Webcams Project
+# Group 3
+
+## Features
+Real-time person detection using YOLOv4-Tiny
+Four-camera support (sequential polling + FSM)
+States:
+  - **Mode 1 (Idle):** no recording
+  - **Mode 2 (Far):** snapshot only
+  - **Mode 3 (Approaching):** video @ ~5 FPS
+  - **Mode 4 (Near):** video @ ~10 FPS
+Target distance estimation using bounding box height
+Timestamped activity log
+
+## Hardware
+Raspberry Pi 4 or 5
+4× USB webcams (1080p recommended)
+USB 3.0 hub
+microSD card
+
+## Software
+Raspberry Pi OS
+Python 3+
+OpenCV (with DNN module)
+NumPy
+psutil
+
+## Our Implementation
 We selected the Xcellon HDWC-WA10 Full HD Wide-Angle Webcam with a 2 MP resolution to be our cameras. We also selected a 4-port power optional USB 3.0 hub to connect all 4 webcams to the Raspberry Pi.
 Distance from the target is estimated due to the lack of depth cameras using a linear relationship:
 
